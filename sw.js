@@ -1,4 +1,4 @@
-const CACHE  = 'htb-bohrz-v3';
+const CACHE  = 'htb-bohrz-v4';
 const ASSETS = ['./', './index.html', './styles.css', './app.js', './manifest.json'];
 
 self.addEventListener('install',   e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS))); self.skipWaiting(); });
