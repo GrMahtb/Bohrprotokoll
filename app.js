@@ -1,10 +1,11 @@
 'use strict';
 
-const VERSION = '20260408-01';
+const VERSION = '20260408-v2';
 const ROWS = 25;
-const STORAGE_DRAFT = 'htb-bohrzaun-draft-v20260408-01';
-const STORAGE_HISTORY = 'htb-bohrzaun-history-v20260408-01';
 const HISTORY_MAX = 30;
+
+const STORAGE_DRAFT = `htb-bohrzaun-draft-${VERSION}`;
+const STORAGE_HISTORY = `htb-bohrzaun-history-${VERSION}`;
 
 const $ = (id) => document.getElementById(id);
 
@@ -12,13 +13,19 @@ const BEZEICHNUNGEN = [
   '–',
   'TI 30/11',
   'TI30/11',
-  'TI 40/20',
   'TI40/20',
   'TITAN 30/11',
   'TITAN 40/20',
   'Seilanker 14,5 mm',
   'Sonstiges'
 ];
+
+const PATTERNS = {
+  '4-7':   { lv: '0,00', lb: '4,00', fv: '4,00', fb: '7,00' },
+  '4.5-7': { lv: '0,00', lb: '4,50', fv: '4,50', fb: '7,00' },
+  '5-7':   { lv: '0,00', lb: '5,00', fv: '5,00', fb: '7,00' },
+  '1-1.5': { lv: '0,00', lb: '1,00', fv: '1,00', fb: '1,50' }
+};
 
 const LOGO_SVG = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
@@ -30,16 +37,60 @@ const LOGO_SVG = `
 </svg>
 `;
 
-let rowRefs = [];
-let sigPads = { an: null, ag: null };
+const refs = {
+  cards: [],
+  sigPads: { an: null, ag: null }
+};
+
+const state = {
+  meta: {
+    datum: '',
+    protoNr: '',
+    baustelle: '',
+    an: 'HTB Baugesellschaft m.b.H.',
+    ag: '',
+    bohrsystem: '',
+    bohrzeitraum: '',
+    verpresszeitraum: '',
+    hinweis: '',
+    sigAnName: '',
+    sigAgName: ''
+  },
+  rows: Array.from({ length: ROWS }, () => emptyRow()),
+  sign: {
+    an: '',
+    ag: ''
+  },
+  ui: {
+    view: 'cards'
+  }
+};
+
 let installPrompt = null;
 
-function fmtDE(value, digits = 2) {
-  return Number(value || 0).toFixed(digits).replace('.', ',');
+function emptyRow() {
+  return {
+    nr: '',
+    neigung: '',
+    bez: '–',
+    gewebe: 'nein',
+    bohrloch: '',
+    zement: '',
+    wz: '0,45',
+    lv: '',
+    lb: '',
+    fv: '',
+    fb: '',
+    note: ''
+  };
 }
 
-function parseNum(value) {
-  const s = String(value ?? '').trim().replace(/\s+/g, '').replace(',', '.');
+function fmtDE(n, digits = 2) {
+  return Number(n || 0).toFixed(digits).replace('.', ',');
+}
+
+function num(v) {
+  const s = String(v ?? '').trim().replace(/\s+/g, '').replace(',', '.');
   const n = Number(s);
   return Number.isFinite(n) ? n : 0;
 }
@@ -59,6 +110,10 @@ function mm(v) {
   return v * 72 / 25.4;
 }
 
+function clone(obj) {
+  return JSON.parse(JSON.stringify(obj));
+}
+
 function debounce(fn, ms) {
   let t = null;
   return (...args) => {
@@ -67,33 +122,25 @@ function debounce(fn, ms) {
   };
 }
 
-async function svgToPngBytes(svgString, width, height) {
-  return new Promise((resolve) => {
-    const blob = new Blob([svgString], { type: 'image/svg+xml' });
-    const url = URL.createObjectURL(blob);
-    const img = new Image();
+function populateBezeichnungSelect(select, includeUnchanged = false) {
+  select.innerHTML = '';
+  if (includeUnchanged) {
+    select.appendChild(new Option('(unverändert)', ''));
+  }
+  BEZEICHNUNGEN.forEach((v) => select.appendChild(new Option(v, v)));
+}
 
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, width, height);
-      URL.revokeObjectURL(url);
-      canvas.toBlob(async (b) => {
-        if (!b) return resolve(null);
-        const ab = await b.arrayBuffer();
-        resolve(new Uint8Array(ab));
-      }, 'image/png');
-    };
+function buildJumpRow() {
+  const sel = $('jumpRow');
+  if (!sel) return;
+  sel.innerHTML = '';
+  for (let i = 0; i < ROWS; i++) {
+    sel.appendChild(new Option(`Zeile ${i + 1}`, String(i)));
+  }
+}
 
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      resolve(null);
-    };
-
-    img.src = url;
-  });
+function buildSeriesSelects() {
+  populateBezeichnungSelect($('series-bez'), true);
 }
 
 function initTabs() {
@@ -110,191 +157,503 @@ function initTabs() {
   });
 }
 
-function buildTable() {
-  const tbody = $('nailBody');
-  if (!tbody) return;
+function setView(view) {
+  state.ui.view = view;
+  const cardsBtn = $('btnViewCards');
+  const tableBtn = $('btnViewTable');
+  const cardsPane = $('viewCards');
+  const tablePane = $('viewTable');
 
-  tbody.innerHTML = '';
-  rowRefs = [];
+  cardsBtn?.classList.toggle('is-active', view === 'cards');
+  tableBtn?.classList.toggle('is-active', view === 'table');
 
-  for (let i = 0; i < ROWS; i++) {
-    const tr = document.createElement('tr');
-    const ref = {};
-
-    const makeText = (cls = '') => {
-      const inp = document.createElement('input');
-      inp.type = 'text';
-      inp.className = cls;
-      inp.addEventListener('input', onAnyInput);
-      return inp;
-    };
-
-    const makeNumber = (cls = '', step = '0.01') => {
-      const inp = document.createElement('input');
-      inp.type = 'number';
-      inp.step = step;
-      inp.inputMode = 'decimal';
-      inp.className = cls;
-      inp.addEventListener('input', onAnyInput);
-      return inp;
-    };
-
-    const makeCell = (child) => {
-      const td = document.createElement('td');
-      if (child) td.appendChild(child);
-      tr.appendChild(td);
-      return td;
-    };
-
-    ref.nr = makeText('inp-nr');
-    makeCell(ref.nr);
-
-    ref.neigung = makeNumber('', '1');
-    makeCell(ref.neigung);
-
-    ref.bez = document.createElement('select');
-    ref.bez.className = 'sel-bez';
-    BEZEICHNUNGEN.forEach((v) => ref.bez.appendChild(new Option(v, v)));
-    ref.bez.addEventListener('change', onAnyInput);
-    makeCell(ref.bez);
-
-    ref.gewebe = makeText('');
-    ref.gewebe.value = 'nein';
-    makeCell(ref.gewebe);
-
-    ref.bohrloch = makeNumber('', '1');
-    makeCell(ref.bohrloch);
-
-    ref.zement = makeNumber('');
-    makeCell(ref.zement);
-
-    ref.wz = makeText('');
-    ref.wz.value = '0,45';
-    makeCell(ref.wz);
-
-    ref.lv = makeNumber('');
-    makeCell(ref.lv);
-
-    ref.lb = makeNumber('');
-    makeCell(ref.lb);
-
-    ref.ld = document.createElement('td');
-    ref.ld.className = 'readonly-cell';
-    ref.ld.textContent = '–';
-    tr.appendChild(ref.ld);
-
-    ref.fv = makeNumber('');
-    makeCell(ref.fv);
-
-    ref.fb = makeNumber('');
-    makeCell(ref.fb);
-
-    ref.fd = document.createElement('td');
-    ref.fd.className = 'readonly-cell';
-    ref.fd.textContent = '–';
-    tr.appendChild(ref.fd);
-
-    ref.len = document.createElement('td');
-    ref.len.className = 'len-cell';
-    ref.len.textContent = '–';
-    tr.appendChild(ref.len);
-
-    ref.note = makeText('inp-note');
-    makeCell(ref.note);
-
-    rowRefs.push(ref);
-    tbody.appendChild(tr);
+  if (cardsPane) {
+    cardsPane.classList.toggle('is-active', view === 'cards');
+    cardsPane.hidden = view !== 'cards';
+  }
+  if (tablePane) {
+    tablePane.classList.toggle('is-active', view === 'table');
+    tablePane.hidden = view !== 'table';
   }
 }
 
-function onAnyInput() {
-  recalc();
-  saveDraftDebounced();
-}
+function computeRow(row) {
+  const lv = num(row.lv);
+  const lb = num(row.lb);
+  const fv = num(row.fv);
+  const fb = num(row.fb);
 
-function rowHasData(r) {
-  return (
-    String(r.nr.value || '').trim() !== '' ||
-    String(r.neigung.value || '').trim() !== '' ||
-    (r.bez.value && r.bez.value !== '–') ||
-    String(r.zement.value || '').trim() !== '' ||
-    String(r.lb.value || '').trim() !== '' ||
-    String(r.fb.value || '').trim() !== '' ||
-    String(r.note.value || '').trim() !== ''
-  );
-}
+  const ld = Math.max(0, lb - lv);
+  const fd = Math.max(0, fb - fv);
+  const len = Math.max(lb, fb);
 
-function recalc() {
-  let count = 0;
-  let sumZement = 0;
-  let sumLen = 0;
+  const any =
+    String(row.nr || '').trim() !== '' ||
+    String(row.neigung || '').trim() !== '' ||
+    (row.bez && row.bez !== '–') ||
+    String(row.zement || '').trim() !== '' ||
+    String(row.lb || '').trim() !== '' ||
+    String(row.fb || '').trim() !== '' ||
+    String(row.note || '').trim() !== '';
 
-  rowRefs.forEach((r) => {
-    const lv = parseNum(r.lv.value);
-    const lb = parseNum(r.lb.value);
-    const fv = parseNum(r.fv.value);
-    const fb = parseNum(r.fb.value);
+  const ok =
+    String(row.nr || '').trim() !== '' &&
+    (row.bez && row.bez !== '–') &&
+    String(row.neigung || '').trim() !== '' &&
+    (String(row.lb || '').trim() !== '' || String(row.fb || '').trim() !== '') &&
+    String(row.zement || '').trim() !== '';
 
-    const ld = Math.max(0, lb - lv);
-    const fd = Math.max(0, fb - fv);
-    const len = Math.max(lb, fb);
-
-    r.ld.textContent = (r.lv.value !== '' || r.lb.value !== '') ? fmtDE(ld) : '–';
-    r.fd.textContent = (r.fv.value !== '' || r.fb.value !== '') ? fmtDE(fd) : '–';
-    r.len.textContent = len > 0 ? fmtDE(len) : '–';
-
-    if (rowHasData(r)) {
-      count += 1;
-      sumZement += parseNum(r.zement.value);
-      sumLen += len;
-    }
-  });
-
-  $('sumCount').textContent = String(count);
-  $('sumCement').textContent = fmtDE(sumZement);
-  $('sumLen').textContent = fmtDE(sumLen);
-}
-
-function collectState() {
   return {
-    v: VERSION,
-    meta: {
-      datum: $('inp-datum')?.value || '',
-      protoNr: $('inp-proto-nr')?.value || '',
-      baustelle: $('inp-baustelle')?.value || '',
-      an: $('inp-an')?.value || '',
-      ag: $('inp-ag')?.value || '',
-      bohrsystem: $('inp-bohrsystem')?.value || '',
-      bohrzeitraum: $('inp-bohrzeitraum')?.value || '',
-      verpresszeitraum: $('inp-verpresszeitraum')?.value || '',
-      hinweis: $('inp-hinweis')?.value || '',
-      sigAnName: $('sigAnName')?.value || '',
-      sigAgName: $('sigAgName')?.value || ''
-    },
-    rows: rowRefs.map((r) => ({
-      nr: r.nr.value || '',
-      neigung: r.neigung.value || '',
-      bez: r.bez.value || '–',
-      gewebe: r.gewebe.value || '',
-      bohrloch: r.bohrloch.value || '',
-      zement: r.zement.value || '',
-      wz: r.wz.value || '',
-      lv: r.lv.value || '',
-      lb: r.lb.value || '',
-      fv: r.fv.value || '',
-      fb: r.fb.value || '',
-      note: r.note.value || ''
-    })),
-    sign: {
-      an: sigPads.an?.getDataURL?.() || '',
-      ag: sigPads.ag?.getDataURL?.() || ''
-    }
+    lv, lb, fv, fb, ld, fd, len,
+    any,
+    status: !any ? 'empty' : ok ? 'ok' : 'partial'
   };
 }
 
-function applyState(state) {
-  if (!state || !state.meta) return;
+function summaryTitle(i, row, d) {
+  const left = row.nr ? row.nr : `Zeile ${i + 1}`;
+  const bez = row.bez && row.bez !== '–' ? row.bez : '—';
+  const nei = row.neigung ? `${row.neigung}°` : '—°';
+  const len = d.len > 0 ? `${fmtDE(d.len)} m` : '— m';
+  return { left, text: `${bez} · ${nei} · ${len}` };
+}
 
+function makeInput(type = 'text', className = 'field__input') {
+  const el = document.createElement('input');
+  el.type = type;
+  el.className = className;
+  return el;
+}
+
+function makeSelect(options = [], className = 'field__select') {
+  const el = document.createElement('select');
+  el.className = className;
+  options.forEach((opt) => el.appendChild(new Option(opt.label, opt.value)));
+  return el;
+}
+
+function fieldWrap(label, input, full = false) {
+  const wrap = document.createElement('label');
+  wrap.className = `field${full ? ' field--full' : ''}`;
+
+  const span = document.createElement('span');
+  span.className = 'field__label';
+  span.textContent = label;
+
+  wrap.appendChild(span);
+  wrap.appendChild(input);
+  return wrap;
+}
+
+function chipsRow(list) {
+  const div = document.createElement('div');
+  div.className = 'chips';
+  list.forEach((item) => div.appendChild(item));
+  return div;
+}
+
+function chip(text, onClick) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'chip';
+  btn.textContent = text;
+  btn.addEventListener('click', onClick);
+  return btn;
+}
+
+function buildCards() {
+  const host = $('cardList');
+  if (!host) return;
+  host.innerHTML = '';
+  refs.cards = [];
+
+  for (let i = 0; i < ROWS; i++) {
+    const details = document.createElement('details');
+    details.className = 'row-card';
+    if (i === 0) details.open = true;
+
+    const summary = document.createElement('summary');
+
+    const status = document.createElement('span');
+    status.className = 'row-card__status row-card__status--empty';
+
+    const head = document.createElement('div');
+    head.className = 'row-card__head';
+
+    const title = document.createElement('div');
+    title.className = 'row-card__title';
+
+    const meta = document.createElement('div');
+    meta.className = 'row-card__meta';
+
+    head.appendChild(title);
+    head.appendChild(meta);
+    summary.appendChild(status);
+    summary.appendChild(head);
+    details.appendChild(summary);
+
+    const body = document.createElement('div');
+    body.className = 'row-card__body';
+
+    const actions = document.createElement('div');
+    actions.className = 'row-actions';
+
+    const btnCopyPrev = document.createElement('button');
+    btnCopyPrev.type = 'button';
+    btnCopyPrev.className = 'btn btn--ghost btn--small';
+    btnCopyPrev.textContent = 'Vorherigen kopieren';
+    btnCopyPrev.addEventListener('click', () => copyFromPrev(i));
+
+    const btnClear = document.createElement('button');
+    btnClear.type = 'button';
+    btnClear.className = 'btn btn--ghost btn--small';
+    btnClear.textContent = 'Zeile leeren';
+    btnClear.addEventListener('click', () => clearRow(i));
+
+    const btnNext = document.createElement('button');
+    btnNext.type = 'button';
+    btnNext.className = 'btn btn--accent btn--small';
+    btnNext.textContent = 'Nächste Zeile';
+    btnNext.addEventListener('click', () => openRow(Math.min(ROWS - 1, i + 1)));
+
+    actions.appendChild(btnCopyPrev);
+    actions.appendChild(btnClear);
+    actions.appendChild(btnNext);
+    body.appendChild(actions);
+
+    const secBase = document.createElement('div');
+    secBase.className = 'row-section';
+    secBase.innerHTML = `<div class="row-section__title">Basisdaten</div>`;
+    const baseGrid = document.createElement('div');
+    baseGrid.className = 'row-grid';
+
+    const inpNr = makeInput('text');
+    const inpNeigung = makeInput('number');
+    inpNeigung.step = '1';
+
+    const selBez = document.createElement('select');
+    selBez.className = 'field__select';
+    populateBezeichnungSelect(selBez, false);
+
+    const selGewebe = makeSelect([
+      { label: 'nein', value: 'nein' },
+      { label: 'ja', value: 'ja' }
+    ]);
+
+    const inpBohrloch = makeInput('number');
+    inpBohrloch.step = '1';
+
+    const inpZement = makeInput('number');
+    inpZement.step = '0.01';
+
+    const inpWz = makeInput('text');
+
+    baseGrid.appendChild(fieldWrap('Nr.', inpNr));
+    baseGrid.appendChild(fieldWrap('Neigung [°]', inpNeigung));
+    baseGrid.appendChild(fieldWrap('Bezeichnung', selBez));
+    baseGrid.appendChild(fieldWrap('Gewebe-strumpf', selGewebe));
+    baseGrid.appendChild(fieldWrap('Bohrloch ø [mm]', inpBohrloch));
+    baseGrid.appendChild(fieldWrap('Zement [kg]', inpZement));
+    baseGrid.appendChild(fieldWrap('W/Z-Wert', inpWz));
+    secBase.appendChild(baseGrid);
+
+    secBase.appendChild(chipsRow([
+      chip('15°', () => setRowField(i, 'neigung', '15')),
+      chip('55°', () => setRowField(i, 'neigung', '55')),
+      chip('65°', () => setRowField(i, 'neigung', '65')),
+      chip('70°', () => setRowField(i, 'neigung', '70')),
+      chip('80°', () => setRowField(i, 'neigung', '80')),
+      chip('Bohrloch 115', () => setRowField(i, 'bohrloch', '115')),
+      chip('Bohrloch 76', () => setRowField(i, 'bohrloch', '76')),
+      chip('W/Z 0,45', () => setRowField(i, 'wz', '0,45'))
+    ]));
+
+    body.appendChild(secBase);
+
+    const secDepth = document.createElement('div');
+    secDepth.className = 'row-section';
+    secDepth.innerHTML = `<div class="row-section__title">Lockergestein / Fels</div>`;
+
+    const depthGrid = document.createElement('div');
+    depthGrid.className = 'row-grid--3 row-grid';
+
+    const inpLv = makeInput('number');
+    inpLv.step = '0.01';
+    const inpLb = makeInput('number');
+    inpLb.step = '0.01';
+    const inpFv = makeInput('number');
+    inpFv.step = '0.01';
+    const inpFb = makeInput('number');
+    inpFb.step = '0.01';
+
+    depthGrid.appendChild(fieldWrap('Lockergestein von [m]', inpLv));
+    depthGrid.appendChild(fieldWrap('Lockergestein bis [m]', inpLb));
+    depthGrid.appendChild(fieldWrap('Fels von [m]', inpFv));
+    depthGrid.appendChild(fieldWrap('Fels bis [m]', inpFb));
+    secDepth.appendChild(depthGrid);
+
+    secDepth.appendChild(chipsRow([
+      chip('0–4 / 4–7', () => applyPattern(i, '4-7')),
+      chip('0–4,5 / 4,5–7', () => applyPattern(i, '4.5-7')),
+      chip('0–5 / 5–7', () => applyPattern(i, '5-7')),
+      chip('0–1 / 1–1,5', () => applyPattern(i, '1-1.5'))
+    ]));
+
+    const result = document.createElement('div');
+    result.className = 'inline-result';
+
+    const ldBox = document.createElement('div');
+    ldBox.className = 'inline-result__item';
+    ldBox.innerHTML = `<span class="inline-result__label">Lockergestein Diff.</span><span class="inline-result__val">–</span>`;
+
+    const fdBox = document.createElement('div');
+    fdBox.className = 'inline-result__item';
+    fdBox.innerHTML = `<span class="inline-result__label">Fels Diff.</span><span class="inline-result__val">–</span>`;
+
+    const lenBox = document.createElement('div');
+    lenBox.className = 'inline-result__item';
+    lenBox.innerHTML = `<span class="inline-result__label">Nagel [m]</span><span class="inline-result__val">–</span>`;
+
+    result.appendChild(ldBox);
+    result.appendChild(fdBox);
+    result.appendChild(lenBox);
+    secDepth.appendChild(result);
+
+    body.appendChild(secDepth);
+
+    const secNote = document.createElement('div');
+    secNote.className = 'row-section';
+    secNote.innerHTML = `<div class="row-section__title">Anmerkung</div>`;
+    const note = document.createElement('textarea');
+    note.className = 'field__textarea';
+    secNote.appendChild(fieldWrap('Anmerkungen', note, true));
+    body.appendChild(secNote);
+
+    details.appendChild(body);
+    host.appendChild(details);
+
+    refs.cards.push({
+      details,
+      title,
+      meta,
+      status,
+      inputs: {
+        nr: inpNr,
+        neigung: inpNeigung,
+        bez: selBez,
+        gewebe: selGewebe,
+        bohrloch: inpBohrloch,
+        zement: inpZement,
+        wz: inpWz,
+        lv: inpLv,
+        lb: inpLb,
+        fv: inpFv,
+        fb: inpFb,
+        note
+      },
+      derived: {
+        ld: ldBox.querySelector('.inline-result__val'),
+        fd: fdBox.querySelector('.inline-result__val'),
+        len: lenBox.querySelector('.inline-result__val')
+      }
+    });
+
+    bindRowInputs(i);
+  }
+}
+
+function bindRowInputs(i) {
+  const card = refs.cards[i];
+  const keys = Object.keys(card.inputs);
+  keys.forEach((key) => {
+    const el = card.inputs[key];
+    const evt = el.tagName === 'SELECT' ? 'change' : 'input';
+    el.addEventListener(evt, () => {
+      state.rows[i][key] = el.value;
+      renderRow(i);
+      renderTotals();
+      renderReviewTable();
+      saveDraftDebounced();
+    });
+  });
+}
+
+function setRowField(i, key, value) {
+  state.rows[i][key] = value;
+  renderRow(i);
+  renderTotals();
+  renderReviewTable();
+  saveDraftDebounced();
+}
+
+function applyPattern(i, patternKey) {
+  const p = PATTERNS[patternKey];
+  if (!p) return;
+  state.rows[i].lv = p.lv;
+  state.rows[i].lb = p.lb;
+  state.rows[i].fv = p.fv;
+  state.rows[i].fb = p.fb;
+  renderRow(i);
+  renderTotals();
+  renderReviewTable();
+  saveDraftDebounced();
+}
+
+function copyFromPrev(i) {
+  if (i <= 0) return;
+  const prev = clone(state.rows[i - 1]);
+  const currentNr = state.rows[i].nr;
+  state.rows[i] = {
+    ...prev,
+    nr: currentNr || '',
+    note: ''
+  };
+  renderRow(i);
+  renderTotals();
+  renderReviewTable();
+  saveDraftDebounced();
+}
+
+function clearRow(i) {
+  state.rows[i] = emptyRow();
+  renderRow(i);
+  renderTotals();
+  renderReviewTable();
+  saveDraftDebounced();
+}
+
+function openRow(i) {
+  refs.cards.forEach((r, idx) => {
+    r.details.open = idx === i;
+  });
+  refs.cards[i]?.details.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  $('jumpRow') && ($('jumpRow').value = String(i));
+  setView('cards');
+}
+
+function renderRow(i) {
+  const row = state.rows[i];
+  const ref = refs.cards[i];
+  if (!ref) return;
+
+  Object.entries(ref.inputs).forEach(([key, el]) => {
+    if (el.value !== String(row[key] ?? '')) {
+      el.value = String(row[key] ?? '');
+    }
+  });
+
+  const d = computeRow(row);
+  const s = summaryTitle(i, row, d);
+
+  ref.title.textContent = s.left;
+  ref.meta.textContent = s.text;
+
+  ref.status.className = `row-card__status row-card__status--${d.status}`;
+
+  ref.derived.ld.textContent = (row.lv !== '' || row.lb !== '') ? fmtDE(d.ld) : '–';
+  ref.derived.fd.textContent = (row.fv !== '' || row.fb !== '') ? fmtDE(d.fd) : '–';
+  ref.derived.len.textContent = d.len > 0 ? fmtDE(d.len) : '–';
+}
+
+function renderAllRows() {
+  for (let i = 0; i < ROWS; i++) renderRow(i);
+}
+
+function getSums() {
+  let count = 0;
+  let cement = 0;
+  let len = 0;
+
+  state.rows.forEach((row) => {
+    const d = computeRow(row);
+    if (d.any) {
+      count += 1;
+      cement += num(row.zement);
+      len += d.len;
+    }
+  });
+
+  return { count, cement, len };
+}
+
+function renderTotals() {
+  const sums = getSums();
+  document.querySelectorAll('[data-sum="count"]').forEach((el) => el.textContent = String(sums.count));
+  document.querySelectorAll('[data-sum="cement"]').forEach((el) => el.textContent = fmtDE(sums.cement));
+  document.querySelectorAll('[data-sum="len"]').forEach((el) => el.textContent = fmtDE(sums.len));
+}
+
+function renderReviewTable() {
+  const body = $('reviewBody');
+  if (!body) return;
+
+  body.innerHTML = '';
+
+  state.rows.forEach((row, i) => {
+    const d = computeRow(row);
+    const tr = document.createElement('tr');
+
+    const statusText = d.status === 'ok' ? 'OK' : d.status === 'partial' ? 'Teilweise' : 'Leer';
+
+    tr.innerHTML = `
+      <td class="sticky-1 txt-left">${row.nr || `Zeile ${i + 1}`}</td>
+      <td class="sticky-2">${row.neigung || ''}</td>
+      <td class="txt-left">${row.bez && row.bez !== '–' ? row.bez : ''}</td>
+      <td>${row.gewebe || ''}</td>
+      <td>${row.bohrloch || ''}</td>
+      <td class="txt-right">${row.zement !== '' ? fmtDE(num(row.zement)) : ''}</td>
+      <td>${row.wz || ''}</td>
+      <td class="txt-right">${row.lv !== '' ? fmtDE(num(row.lv)) : ''}</td>
+      <td class="txt-right">${row.lb !== '' ? fmtDE(num(row.lb)) : ''}</td>
+      <td class="txt-right muted">${(row.lv !== '' || row.lb !== '') ? fmtDE(d.ld) : ''}</td>
+      <td class="txt-right">${row.fv !== '' ? fmtDE(num(row.fv)) : ''}</td>
+      <td class="txt-right">${row.fb !== '' ? fmtDE(num(row.fb)) : ''}</td>
+      <td class="txt-right muted">${(row.fv !== '' || row.fb !== '') ? fmtDE(d.fd) : ''}</td>
+      <td class="txt-right accent">${d.len > 0 ? fmtDE(d.len) : ''}</td>
+      <td class="txt-left">${row.note || ''}</td>
+      <td>
+        <button class="btn btn--ghost btn--small" type="button" data-open-row="${i}">Öffnen</button>
+      </td>
+    `;
+
+    body.appendChild(tr);
+  });
+
+  body.querySelectorAll('[data-open-row]').forEach((btn) => {
+    btn.addEventListener('click', () => openRow(Number(btn.dataset.openRow)));
+  });
+}
+
+function bindMetaInputs() {
+  const map = {
+    'inp-datum': 'datum',
+    'inp-proto-nr': 'protoNr',
+    'inp-baustelle': 'baustelle',
+    'inp-an': 'an',
+    'inp-ag': 'ag',
+    'inp-bohrsystem': 'bohrsystem',
+    'inp-bohrzeitraum': 'bohrzeitraum',
+    'inp-verpresszeitraum': 'verpresszeitraum',
+    'inp-hinweis': 'hinweis',
+    'sigAnName': 'sigAnName',
+    'sigAgName': 'sigAgName'
+  };
+
+  Object.entries(map).forEach(([id, key]) => {
+    const el = $(id);
+    if (!el) return;
+    el.addEventListener('input', () => {
+      state.meta[key] = el.value;
+      saveDraftDebounced();
+    });
+    el.addEventListener('change', () => {
+      state.meta[key] = el.value;
+      saveDraftDebounced();
+    });
+  });
+}
+
+function applyMetaToInputs() {
   $('inp-datum').value = state.meta.datum || '';
   $('inp-proto-nr').value = state.meta.protoNr || '';
   $('inp-baustelle').value = state.meta.baustelle || '';
@@ -306,39 +665,58 @@ function applyState(state) {
   $('inp-hinweis').value = state.meta.hinweis || '';
   $('sigAnName').value = state.meta.sigAnName || '';
   $('sigAgName').value = state.meta.sigAgName || '';
+}
 
-  (state.rows || []).slice(0, ROWS).forEach((row, i) => {
-    const r = rowRefs[i];
-    if (!r) return;
-    r.nr.value = row.nr ?? '';
-    r.neigung.value = row.neigung ?? '';
-    r.bez.value = row.bez ?? '–';
-    r.gewebe.value = row.gewebe ?? 'nein';
-    r.bohrloch.value = row.bohrloch ?? '';
-    r.zement.value = row.zement ?? '';
-    r.wz.value = row.wz ?? '';
-    r.lv.value = row.lv ?? '';
-    r.lb.value = row.lb ?? '';
-    r.fv.value = row.fv ?? '';
-    r.fb.value = row.fb ?? '';
-    r.note.value = row.note ?? '';
-  });
+function applyState(snap) {
+  if (!snap) return;
 
-  sigPads.an?.setFromDataURL?.(state.sign?.an || '');
-  sigPads.ag?.setFromDataURL?.(state.sign?.ag || '');
-  recalc();
+  state.meta = {
+    ...state.meta,
+    ...(snap.meta || {})
+  };
+
+  state.rows = Array.from({ length: ROWS }, (_, i) => ({
+    ...emptyRow(),
+    ...((snap.rows || [])[i] || {})
+  }));
+
+  state.sign = {
+    an: snap.sign?.an || '',
+    ag: snap.sign?.ag || ''
+  };
+
+  applyMetaToInputs();
+  renderAllRows();
+  renderTotals();
+  renderReviewTable();
+
+  refs.sigPads.an?.setFromDataURL?.(state.sign.an || '');
+  refs.sigPads.ag?.setFromDataURL?.(state.sign.ag || '');
+}
+
+function snapshot() {
+  return {
+    v: VERSION,
+    meta: clone(state.meta),
+    rows: clone(state.rows),
+    sign: {
+      an: refs.sigPads.an?.getDataURL?.() || '',
+      ag: refs.sigPads.ag?.getDataURL?.() || ''
+    }
+  };
 }
 
 const saveDraftDebounced = debounce(() => {
   try {
-    localStorage.setItem(STORAGE_DRAFT, JSON.stringify(collectState()));
+    localStorage.setItem(STORAGE_DRAFT, JSON.stringify(snapshot()));
   } catch {}
 }, 250);
 
 function loadDraft() {
   try {
     const raw = localStorage.getItem(STORAGE_DRAFT);
-    if (raw) applyState(JSON.parse(raw));
+    if (!raw) return;
+    applyState(JSON.parse(raw));
   } catch {}
 }
 
@@ -356,41 +734,13 @@ function writeHistory(list) {
   } catch {}
 }
 
-function getSnapshotSums(snap) {
-  let count = 0;
-  let sumZement = 0;
-  let sumLen = 0;
-
-  (snap.rows || []).forEach((r) => {
-    const has = (
-      String(r.nr || '').trim() !== '' ||
-      String(r.neigung || '').trim() !== '' ||
-      (r.bez && r.bez !== '–') ||
-      String(r.zement || '').trim() !== '' ||
-      String(r.lb || '').trim() !== '' ||
-      String(r.fb || '').trim() !== ''
-    );
-
-    const len = Math.max(parseNum(r.lb), parseNum(r.fb));
-    const zem = parseNum(r.zement);
-
-    if (has) {
-      count += 1;
-      sumZement += zem;
-      sumLen += len;
-    }
-  });
-
-  return { count, sumZement, sumLen };
-}
-
 function saveToHistory() {
-  const snap = collectState();
-  const sums = getSnapshotSums(snap);
+  const snap = snapshot();
+  const sums = getSums();
   const entry = {
     id: uid(),
     savedAt: Date.now(),
-    title: `${snap.meta.baustelle || '—'} · Prot ${snap.meta.protoNr || '—'} · ${dateDE(snap.meta.datum)}`,
+    title: `${state.meta.baustelle || '—'} · Prot ${state.meta.protoNr || '—'} · ${dateDE(state.meta.datum)}`,
     snap,
     sums
   };
@@ -423,8 +773,8 @@ function renderHistory() {
       </div>
       <div class="historySub">
         Nägel: <b>${entry.sums.count}</b> ·
-        Zement: <b>${fmtDE(entry.sums.sumZement)} kg</b> ·
-        Nagellänge: <b>${fmtDE(entry.sums.sumLen)} m</b>
+        Zement: <b>${fmtDE(entry.sums.cement)} kg</b> ·
+        Nagellänge: <b>${fmtDE(entry.sums.len)} m</b>
       </div>
       <div class="historyBtns">
         <button class="btn btn--ghost" type="button" data-act="load" data-id="${entry.id}">Laden</button>
@@ -439,8 +789,8 @@ function renderHistory() {
     btn.addEventListener('click', async () => {
       const id = btn.dataset.id;
       const act = btn.dataset.act;
-      const list2 = readHistory();
-      const entry = list2.find((e) => e.id === id);
+      const list = readHistory();
+      const entry = list.find((e) => e.id === id);
 
       if (act === 'load' && entry) {
         applyState(entry.snap);
@@ -453,10 +803,115 @@ function renderHistory() {
       }
 
       if (act === 'del') {
-        writeHistory(list2.filter((e) => e.id !== id));
+        writeHistory(list.filter((e) => e.id !== id));
         renderHistory();
       }
     });
+  });
+}
+
+function applySeries() {
+  const from = Math.max(1, Math.min(ROWS, Number($('series-from').value || 1)));
+  const to = Math.max(1, Math.min(ROWS, Number($('series-to').value || ROWS)));
+  const a = Math.min(from, to) - 1;
+  const b = Math.max(from, to) - 1;
+
+  const values = {
+    bez: $('series-bez').value,
+    neigung: $('series-neigung').value.trim(),
+    gewebe: $('series-gewebe').value,
+    bohrloch: $('series-bohrloch').value.trim(),
+    zement: $('series-zement').value.trim(),
+    wz: $('series-wz').value.trim()
+  };
+
+  const pattern = $('series-pattern').value;
+
+  for (let i = a; i <= b; i++) {
+    if (values.bez) state.rows[i].bez = values.bez;
+    if (values.neigung !== '') state.rows[i].neigung = values.neigung;
+    if (values.gewebe !== '') state.rows[i].gewebe = values.gewebe;
+    if (values.bohrloch !== '') state.rows[i].bohrloch = values.bohrloch;
+    if (values.zement !== '') state.rows[i].zement = values.zement;
+    if (values.wz !== '') state.rows[i].wz = values.wz;
+
+    if (pattern && PATTERNS[pattern]) {
+      state.rows[i].lv = PATTERNS[pattern].lv;
+      state.rows[i].lb = PATTERNS[pattern].lb;
+      state.rows[i].fv = PATTERNS[pattern].fv;
+      state.rows[i].fb = PATTERNS[pattern].fb;
+    }
+  }
+
+  renderAllRows();
+  renderTotals();
+  renderReviewTable();
+  saveDraftDebounced();
+}
+
+function hookViewButtons() {
+  $('btnViewCards')?.addEventListener('click', () => setView('cards'));
+  $('btnViewTable')?.addEventListener('click', () => {
+    renderReviewTable();
+    setView('table');
+  });
+}
+
+function hookJump() {
+  $('btnJumpRow')?.addEventListener('click', () => {
+    const idx = Number($('jumpRow').value || 0);
+    openRow(idx);
+  });
+}
+
+function hookSeries() {
+  $('btnApplySeries')?.addEventListener('click', applySeries);
+}
+
+function resetAll() {
+  state.meta = {
+    datum: $('inp-datum')?.value || new Date().toISOString().slice(0, 10),
+    protoNr: '',
+    baustelle: '',
+    an: 'HTB Baugesellschaft m.b.H.',
+    ag: '',
+    bohrsystem: '',
+    bohrzeitraum: '',
+    verpresszeitraum: '',
+    hinweis: '',
+    sigAnName: '',
+    sigAgName: ''
+  };
+
+  state.rows = Array.from({ length: ROWS }, () => emptyRow());
+  state.sign = { an: '', ag: '' };
+
+  applyMetaToInputs();
+  renderAllRows();
+  renderTotals();
+  renderReviewTable();
+
+  refs.sigPads.an?.clear();
+  refs.sigPads.ag?.clear();
+
+  saveDraftDebounced();
+}
+
+function hookButtons() {
+  $('btnReset')?.addEventListener('click', resetAll);
+
+  $('btnSave')?.addEventListener('click', () => {
+    saveToHistory();
+    alert('Protokoll gespeichert.');
+  });
+
+  $('btnPdf')?.addEventListener('click', async () => {
+    try {
+      await exportPdf();
+    } catch (err) {
+      console.error(err);
+      alert('PDF-Fehler: ' + (err?.message || String(err)));
+    }
   });
 }
 
@@ -467,9 +922,9 @@ function resizeCanvasForHiDPI(canvas) {
   const h = Math.max(10, Math.floor(rect.height * dpr));
 
   if (canvas.width === w && canvas.height === h) return;
+
   canvas.width = w;
   canvas.height = h;
-
   const ctx = canvas.getContext('2d');
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
@@ -546,15 +1001,14 @@ function makeSignaturePad(canvas, onChange) {
       onChange?.();
     },
     getDataURL() {
-      if (!signed) return '';
-      return canvas.toDataURL('image/png');
+      return signed ? canvas.toDataURL('image/png') : '';
     },
-    setFromDataURL(dataURL) {
+    setFromDataURL(url) {
       prep();
       const rect = canvas.getBoundingClientRect();
       ctx.clearRect(0, 0, rect.width, rect.height);
       fillWhite(canvas);
-      if (!dataURL) {
+      if (!url) {
         signed = false;
         return;
       }
@@ -563,17 +1017,21 @@ function makeSignaturePad(canvas, onChange) {
         ctx.drawImage(img, 0, 0, rect.width, rect.height);
         signed = true;
       };
-      img.src = dataURL;
+      img.src = url;
     }
   };
 }
 
 function initSignaturePads() {
-  sigPads.an = makeSignaturePad($('sigAnCanvas'), saveDraftDebounced);
-  sigPads.ag = makeSignaturePad($('sigAgCanvas'), saveDraftDebounced);
+  const an = $('sigAnCanvas');
+  const ag = $('sigAgCanvas');
+  if (!an || !ag) return;
 
-  $('sigAnClear')?.addEventListener('click', () => sigPads.an.clear());
-  $('sigAgClear')?.addEventListener('click', () => sigPads.ag.clear());
+  refs.sigPads.an = makeSignaturePad(an, saveDraftDebounced);
+  refs.sigPads.ag = makeSignaturePad(ag, saveDraftDebounced);
+
+  $('sigAnClear')?.addEventListener('click', () => refs.sigPads.an.clear());
+  $('sigAgClear')?.addEventListener('click', () => refs.sigPads.ag.clear());
 }
 
 function dataURLtoUint8(dataURL) {
@@ -585,8 +1043,38 @@ function dataURLtoUint8(dataURL) {
   return arr;
 }
 
-async function exportPdf(snapArg = null) {
-  const snap = snapArg || collectState();
+async function svgToPngBytes(svgString, width, height) {
+  return new Promise((resolve) => {
+    const blob = new Blob([svgString], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(url);
+
+      canvas.toBlob(async (b) => {
+        if (!b) return resolve(null);
+        const ab = await b.arrayBuffer();
+        resolve(new Uint8Array(ab));
+      }, 'image/png');
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    };
+
+    img.src = url;
+  });
+}
+
+async function exportPdf(optSnap = null) {
+  const snap = optSnap || snapshot();
   const meta = snap.meta || {};
 
   if (!window.PDFLib) {
@@ -596,7 +1084,6 @@ async function exportPdf(snapArg = null) {
 
   const { PDFDocument, StandardFonts, rgb } = window.PDFLib;
   const pdf = await PDFDocument.create();
-
   const fontR = await pdf.embedFont(StandardFonts.Helvetica);
   const fontB = await pdf.embedFont(StandardFonts.HelveticaBold);
 
@@ -650,23 +1137,18 @@ async function exportPdf(snapArg = null) {
     let s = String(text ?? '');
     if (!s) return '';
     const measure = (t) => font.widthOfTextAtSize(t, size);
-
     if (measure(s) <= maxWidth) return s;
-
-    while (s.length > 1 && measure(s + '…') > maxWidth) {
-      s = s.slice(0, -1);
-    }
-    return s ? `${s}…` : '';
+    while (s.length > 1 && measure(s + '…') > maxWidth) s = s.slice(0, -1);
+    return s ? s + '…' : '';
   }
 
   function drawTextCell(text, x, yTop, w, h, font, size, align = 'left', pad = mm(0.8)) {
     const raw = String(text ?? '').trim();
     if (!raw) return;
-    const maxW = Math.max(1, w - pad * 2);
-    const fitted = fitText(raw, font, size, maxW);
+    const fitted = fitText(raw, font, size, Math.max(1, w - pad * 2));
     const tw = font.widthOfTextAtSize(fitted, size);
-    let tx = x + pad;
 
+    let tx = x + pad;
     if (align === 'center') tx = x + (w - tw) / 2;
     if (align === 'right') tx = x + w - pad - tw;
 
@@ -677,16 +1159,15 @@ async function exportPdf(snapArg = null) {
   function drawMultiCell(lines, x, yTop, w, h, font, size) {
     const arr = Array.isArray(lines) ? lines.filter(Boolean) : [String(lines)];
     if (!arr.length) return;
-    const lineGap = size + 1;
-    const total = arr.length * lineGap;
-    const startY = yTop - h + (h - total) / 2 + lineGap - 1;
-
+    const gap = size + 1;
+    const total = arr.length * gap;
+    const startY = yTop - h + (h - total) / 2 + gap - 1;
     arr.forEach((line, idx) => {
       const fitted = fitText(line, font, size, w - mm(1.6));
       const tw = font.widthOfTextAtSize(fitted, size);
       page.drawText(fitted, {
         x: x + (w - tw) / 2,
-        y: startY + (arr.length - 1 - idx) * lineGap,
+        y: startY + (arr.length - 1 - idx) * gap,
         size,
         font,
         color: K
@@ -764,10 +1245,7 @@ async function exportPdf(snapArg = null) {
   const col = colMM.map(mm);
   const xPos = [];
   let run = left;
-  col.forEach((w) => {
-    xPos.push(run);
-    run += w;
-  });
+  col.forEach((w) => { xPos.push(run); run += w; });
 
   const nagelDataW = col.slice(0, 7).reduce((a, b) => a + b, 0);
   const lockW = col[7] + col[8] + col[9];
@@ -827,19 +1305,13 @@ async function exportPdf(snapArg = null) {
     for (let c = 1; c < xPos.length; c++) {
       page.drawLine({
         start: { x: xPos[c], y: y - dataRowH },
-        end: { x: xPos[c], y: y },
+        end: { x: xPos[c], y },
         thickness: 0.25,
         color: K
       });
     }
 
-    const lv = parseNum(r.lv);
-    const lb = parseNum(r.lb);
-    const fv = parseNum(r.fv);
-    const fb = parseNum(r.fb);
-    const ld = Math.max(0, lb - lv);
-    const fd = Math.max(0, fb - fv);
-    const len = Math.max(lb, fb);
+    const d = computeRow(r);
 
     const vals = [
       r.nr || '',
@@ -847,15 +1319,15 @@ async function exportPdf(snapArg = null) {
       (r.bez && r.bez !== '–') ? r.bez : '',
       r.gewebe || '',
       r.bohrloch || '',
-      r.zement !== '' ? fmtDE(parseNum(r.zement)) : '',
+      r.zement !== '' ? fmtDE(num(r.zement)) : '',
       r.wz || '',
-      r.lv !== '' ? fmtDE(lv) : '',
-      r.lb !== '' ? fmtDE(lb) : '',
-      (r.lv !== '' || r.lb !== '') ? fmtDE(ld) : '',
-      r.fv !== '' ? fmtDE(fv) : '',
-      r.fb !== '' ? fmtDE(fb) : '',
-      (r.fv !== '' || r.fb !== '') ? fmtDE(fd) : '',
-      len > 0 ? fmtDE(len) : '',
+      r.lv !== '' ? fmtDE(num(r.lv)) : '',
+      r.lb !== '' ? fmtDE(num(r.lb)) : '',
+      (r.lv !== '' || r.lb !== '') ? fmtDE(d.ld) : '',
+      r.fv !== '' ? fmtDE(num(r.fv)) : '',
+      r.fb !== '' ? fmtDE(num(r.fb)) : '',
+      (r.fv !== '' || r.fb !== '') ? fmtDE(d.fd) : '',
+      d.len > 0 ? fmtDE(d.len) : '',
       r.note || ''
     ];
 
@@ -878,16 +1350,26 @@ async function exportPdf(snapArg = null) {
   page.drawLine({ start: { x: left + third, y: y - sum1H }, end: { x: left + third, y }, thickness: 0.5, color: K });
   page.drawLine({ start: { x: left + third * 2, y: y - sum1H }, end: { x: left + third * 2, y }, thickness: 0.5, color: K });
 
-  const sums = getSnapshotSums(snap);
+  const sums = (() => {
+    let count = 0, cement = 0, len = 0;
+    rows.forEach((r) => {
+      const d = computeRow(r);
+      if (d.any) {
+        count++;
+        cement += num(r.zement);
+        len += d.len;
+      }
+    });
+    return { count, cement, len };
+  })();
 
   drawTextCell(`Nagelanzahl [Stk.]: ${sums.count}`, left, y, third, sum1H, fontB, 8);
-  drawTextCell(`Zement ges. [kg]: ${fmtDE(sums.sumZement)}`, left + third, y, third, sum1H, fontB, 8);
-  drawTextCell(`Nagellänge ges. [m]: ${fmtDE(sums.sumLen)}`, left + third * 2, y, third, sum1H, fontB, 8);
+  drawTextCell(`Zement ges. [kg]: ${fmtDE(sums.cement)}`, left + third, y, third, sum1H, fontB, 8);
+  drawTextCell(`Nagellänge ges. [m]: ${fmtDE(sums.len)}`, left + third * 2, y, third, sum1H, fontB, 8);
 
   y -= sum1H;
 
   drawRect(left, y, width, sum2H, W, 0.8);
-
   const q = width / 4;
   page.drawLine({ start: { x: left + q, y: y - sum2H }, end: { x: left + q, y }, thickness: 0.5, color: K });
   page.drawLine({ start: { x: left + q * 2, y: y - sum2H }, end: { x: left + q * 2, y }, thickness: 0.5, color: K });
@@ -942,74 +1424,6 @@ async function exportPdf(snapArg = null) {
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
-function hookMetaEvents() {
-  [
-    'inp-datum',
-    'inp-proto-nr',
-    'inp-baustelle',
-    'inp-an',
-    'inp-ag',
-    'inp-bohrsystem',
-    'inp-bohrzeitraum',
-    'inp-verpresszeitraum',
-    'inp-hinweis',
-    'sigAnName',
-    'sigAgName'
-  ].forEach((id) => {
-    $(id)?.addEventListener('input', onAnyInput);
-    $(id)?.addEventListener('change', onAnyInput);
-  });
-}
-
-function hookButtons() {
-  $('btnReset')?.addEventListener('click', () => {
-    $('inp-proto-nr').value = '';
-    $('inp-baustelle').value = '';
-    $('inp-ag').value = '';
-    $('inp-bohrsystem').value = '';
-    $('inp-bohrzeitraum').value = '';
-    $('inp-verpresszeitraum').value = '';
-    $('inp-hinweis').value = '';
-    $('sigAnName').value = '';
-    $('sigAgName').value = '';
-
-    rowRefs.forEach((r) => {
-      r.nr.value = '';
-      r.neigung.value = '';
-      r.bez.value = '–';
-      r.gewebe.value = 'nein';
-      r.bohrloch.value = '';
-      r.zement.value = '';
-      r.wz.value = '0,45';
-      r.lv.value = '';
-      r.lb.value = '';
-      r.fv.value = '';
-      r.fb.value = '';
-      r.note.value = '';
-    });
-
-    sigPads.an?.clear();
-    sigPads.ag?.clear();
-
-    recalc();
-    saveDraftDebounced();
-  });
-
-  $('btnSave')?.addEventListener('click', () => {
-    saveToHistory();
-    alert('Protokoll gespeichert.');
-  });
-
-  $('btnPdf')?.addEventListener('click', async () => {
-    try {
-      await exportPdf();
-    } catch (err) {
-      console.error(err);
-      alert('PDF-Fehler: ' + (err?.message || String(err)));
-    }
-  });
-}
-
 function initInstallButton() {
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
@@ -1021,8 +1435,8 @@ function initInstallButton() {
   $('btnInstall')?.addEventListener('click', async () => {
     if (!installPrompt) return;
     installPrompt.prompt();
-    const choice = await installPrompt.userChoice;
-    if (choice?.outcome === 'accepted') $('btnInstall').hidden = true;
+    const result = await installPrompt.userChoice;
+    if (result?.outcome === 'accepted') $('btnInstall').hidden = true;
     installPrompt = null;
   });
 
@@ -1041,19 +1455,29 @@ async function registerSW() {
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
-  if ($('inp-datum') && !$('inp-datum').value) {
-    $('inp-datum').value = new Date().toISOString().slice(0, 10);
+  if (!state.meta.datum) {
+    state.meta.datum = new Date().toISOString().slice(0, 10);
   }
 
   initTabs();
-  buildTable();
+  buildJumpRow();
+  buildSeriesSelects();
+  buildCards();
+  bindMetaInputs();
   initSignaturePads();
-  hookMetaEvents();
+  hookViewButtons();
+  hookJump();
+  hookSeries();
   hookButtons();
   initInstallButton();
 
+  applyMetaToInputs();
+  renderAllRows();
+  renderTotals();
+  renderReviewTable();
+  setView('cards');
+
   loadDraft();
-  recalc();
   renderHistory();
 
   registerSW();
