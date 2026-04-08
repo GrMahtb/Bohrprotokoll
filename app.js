@@ -1,550 +1,798 @@
 'use strict';
 
-/* ─── Konstanten ───────────────────────────────── */
-const STORAGE_DRAFT   = 'htb-bohrz-v3';
-const STORAGE_HISTORY = 'htb-bohrz-hist-v3';
-const HISTORY_MAX     = 30;
-const ROWS            = 25;
+const VERSION = '20260408-01';
+const ROWS = 25;
+const STORAGE_DRAFT = 'htb-bohrzaun-draft-v20260408-01';
+const STORAGE_HISTORY = 'htb-bohrzaun-history-v20260408-01';
+const HISTORY_MAX = 30;
 
-const $ = id => document.getElementById(id);
+const $ = (id) => document.getElementById(id);
 
-/* ─── Bezeichnung-Dropdown ─────────────────────── */
 const BEZEICHNUNGEN = [
   '–',
   'TI 30/11',
   'TI30/11',
   'TI 40/20',
   'TI40/20',
-  'Seilanker 14,5 mm',
   'TITAN 30/11',
   'TITAN 40/20',
-  'Sonstiges',
+  'Seilanker 14,5 mm',
+  'Sonstiges'
 ];
 
-/* ─── HTB Logo SVG als Data-URL (aus internem Wissen) ── */
-const HTB_LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-<rect width="512" height="512" rx="80" fill="#111111"/>
-<g transform="translate(256,256) scale(0.72) translate(-318.9,-248)">
-<path fill="#000000" d="M531.5,177.12H148.73l43.08-28.73c6.57-4.38,14.29-6.72,22.18-6.72h285.8s-140.7-93.84-140.7-93.84c-.7-.48-1.44-.95-2.15-1.42-21.73-14.64-54.36-14.64-76.09,0-.72.48-1.44.94-2.15,1.42L66.6,189.29h0c-4.68,3.2-8.98,6.93-12.8,11.12-41.01,45.63-8.95,118.29,52.5,118.53h382.77l-43.08,28.73c-6.57,4.38-14.29,6.72-22.19,6.72H138.01s140.71,93.84,140.71,93.84c.7.49,1.44.95,2.15,1.43,21.73,14.64,54.36,14.64,76.09,0,.72-.48,1.44-.94,2.14-1.42l212.1-141.45h0c4.69-3.21,9.01-6.96,12.84-11.16,11.73-12.89,18.35-30.15,18.33-47.58,0-39.16-31.73-70.9-70.87-70.9Z"/>
-<path fill="#ffed00" d="M438.32,263.5c.08-5.32-1.27-9.39-4.05-12.22-2.79-2.82-7.04-4.81-12.77-5.96,4.83-.9,8.43-2.8,10.81-5.71,2.37-2.91,3.56-6.61,3.56-11.11v-3.44c0-4.83-.94-8.72-2.82-11.67-1.88-2.95-4.75-5.08-8.6-6.39-3.85-1.31-8.72-1.96-14.61-1.96h-157.8v33.77h-30.21v-33.77h-22.59v85.96h22.59v-35.73h30.21v35.73h22.72v-69.26h33.52v69.26h22.84v-69.26h33.4v69.26h45.31c6.38,0,11.69-.78,15.9-2.33,4.21-1.55,7.41-3.99,9.58-7.31,2.17-3.32,3.25-7.55,3.25-12.71l-.25-5.16ZM386.87,220.77h18.42c2.78,0,4.81.57,6.08,1.72,1.27,1.15,1.9,3.11,1.9,5.89v3.19c0,1.96-.29,3.54-.86,4.73-.57,1.19-1.43,2.05-2.58,2.58-1.15.53-2.7,0,0,0Z"/>
-</g>
-</svg>`;
+const LOGO_SVG = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="80" fill="#111111"/>
+  <g transform="translate(256,256) scale(0.72) translate(-318.9,-248)">
+    <path fill="#000000" d="M531.5,177.12H148.73l43.08-28.73c6.57-4.38,14.29-6.72,22.18-6.72h285.8s-140.7-93.84-140.7-93.84c-.7-.48-1.44-.95-2.15-1.42-21.73-14.64-54.36-14.64-76.09,0-.72.48-1.44.94-2.15,1.42L66.6,189.29h0c-4.68,3.2-8.98,6.93-12.8,11.12-41.01,45.63-8.95,118.29,52.5,118.53h382.77l-43.08,28.73c-6.57,4.38-14.29,6.72-22.19,6.72H138.01s140.71,93.84,140.71,93.84c.7.49,1.44.95,2.15,1.43,21.73,14.64,54.36,14.64,76.09,0,.72-.48,1.44-.94,2.14-1.42l212.1-141.45h0c4.69-3.21,9.01-6.96,12.84-11.16,11.73-12.89,18.35-30.15,18.33-47.58,0-39.16-31.73-70.9-70.87-70.9Z"/>
+    <path fill="#ffed00" d="M438.32,263.5c.08-5.32-1.27-9.39-4.05-12.22-2.79-2.82-7.04-4.81-12.77-5.96,4.83-.9,8.43-2.8,10.81-5.71,2.37-2.91,3.56-6.61,3.56-11.11v-3.44c0-4.83-.94-8.72-2.82-11.67-1.88-2.95-4.75-5.08-8.6-6.39-3.85-1.31-8.72-1.96-14.61-1.96h-157.8v33.77h-30.21v-33.77h-22.59v85.96h22.59v-35.73h30.21v35.73h22.72v-69.26h33.52v69.26h22.84v-69.26h33.4v69.26h45.31c6.38,0,11.69-.78,15.9-2.33,4.21-1.55,7.41-3.99,9.58-7.31,2.17-3.32,3.25-7.55,3.25-12.71l-.25-5.16Z"/>
+  </g>
+</svg>
+`;
 
-/* ─── SVG → PNG via Canvas ─────────────────────── */
-async function svgToPngBytes(svgStr, w, h) {
-  return new Promise(resolve => {
-    const blob = new Blob([svgStr], { type: 'image/svg+xml' });
-    const url  = URL.createObjectURL(blob);
-    const img  = new Image(w, h);
+let rowRefs = [];
+let sigPads = { an: null, ag: null };
+let installPrompt = null;
+
+function fmtDE(value, digits = 2) {
+  return Number(value || 0).toFixed(digits).replace('.', ',');
+}
+
+function parseNum(value) {
+  const s = String(value ?? '').trim().replace(/\s+/g, '').replace(',', '.');
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function dateDE(value) {
+  const s = String(value || '').trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return `${m[3]}.${m[2]}.${m[1]}`;
+  return s;
+}
+
+function uid() {
+  return crypto?.randomUUID?.() || `id_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function mm(v) {
+  return v * 72 / 25.4;
+}
+
+function debounce(fn, ms) {
+  let t = null;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), ms);
+  };
+}
+
+async function svgToPngBytes(svgString, width, height) {
+  return new Promise((resolve) => {
+    const blob = new Blob([svgString], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+
     img.onload = () => {
-      const cv = document.createElement('canvas');
-      cv.width = w; cv.height = h;
-      const ctx = cv.getContext('2d');
-      ctx.drawImage(img, 0, 0, w, h);
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
       URL.revokeObjectURL(url);
-      cv.toBlob(b => {
-        b.arrayBuffer().then(ab => resolve(new Uint8Array(ab)));
+      canvas.toBlob(async (b) => {
+        if (!b) return resolve(null);
+        const ab = await b.arrayBuffer();
+        resolve(new Uint8Array(ab));
       }, 'image/png');
     };
-    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    };
+
     img.src = url;
   });
 }
 
-/* ─── Helpers ──────────────────────────────────── */
-function fmtC(n, d = 2) { return Number(n || 0).toFixed(d).replace('.', ','); }
-function num(v) { const x = Number(String(v || '').replace(',', '.')); return isNaN(x) ? 0 : x; }
-function uid() { return crypto?.randomUUID?.() || ('id_' + Date.now() + '_' + Math.random().toString(16).slice(2)); }
-function dateDE(iso) {
-  const s = String(iso || '').trim();
-  if (!s) return '';
-  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (m) return `${m[3]}.${m[2]}.${m[1]}`;
-  return s;
-}
-function dateName(d = new Date()) {
-  return String(d.getDate()).padStart(2, '0') +
-    String(d.getMonth() + 1).padStart(2, '0') +
-    String(d.getFullYear());
-}
-
-/* ─── Row refs ─────────────────────────────────── */
-let rowRefs = [];
-let sigPads = { an: null, ag: null };
-
-/* ─── Tabs ─────────────────────────────────────── */
 function initTabs() {
-  document.querySelectorAll('.tab').forEach(btn => {
+  document.querySelectorAll('.tab').forEach((btn) => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.tab').forEach(b => b.classList.toggle('is-active', b === btn));
-      document.querySelectorAll('.pane').forEach(p => {
-        const on = p.id === `tab-${btn.dataset.tab}`;
-        p.classList.toggle('is-active', on);
-        p.hidden = !on;
+      document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('is-active', b === btn));
+      document.querySelectorAll('.pane').forEach((pane) => {
+        const active = pane.id === `tab-${btn.dataset.tab}`;
+        pane.classList.toggle('is-active', active);
+        pane.hidden = !active;
       });
       if (btn.dataset.tab === 'verlauf') renderHistory();
     });
   });
 }
 
-/* ─── Table build ──────────────────────────────── */
 function buildTable() {
   const tbody = $('nailBody');
   if (!tbody) return;
+
   tbody.innerHTML = '';
   rowRefs = [];
 
   for (let i = 0; i < ROWS; i++) {
     const tr = document.createElement('tr');
-    if (i % 2 === 0) tr.style.background = 'rgba(255,255,255,0.015)';
+    const ref = {};
 
-    const mkN = (cls) => {
-      const inp = document.createElement('input');
-      inp.type = 'number'; inp.step = '0.01'; inp.inputMode = 'decimal';
-      if (cls) inp.className = cls;
-      inp.addEventListener('input', () => { recalc(); draftDebounce(); });
-      return inp;
-    };
-    const mkT = (cls) => {
+    const makeText = (cls = '') => {
       const inp = document.createElement('input');
       inp.type = 'text';
-      if (cls) inp.className = cls;
-      inp.addEventListener('input', () => { recalc(); draftDebounce(); });
+      inp.className = cls;
+      inp.addEventListener('input', onAnyInput);
       return inp;
     };
-    const cel = (el) => { const td = document.createElement('td'); td.appendChild(el); tr.appendChild(td); return td; };
 
-    // Nr
-    const inpNr = mkT('inp-nr'); cel(inpNr);
-    // Neigung
-    const inpNei = mkN(); inpNei.step = '1'; inpNei.min = '0'; inpNei.max = '90'; cel(inpNei);
-    // Bezeichnung
-    const selBez = document.createElement('select');
-    selBez.className = 'sel-bez';
-    BEZEICHNUNGEN.forEach(b => selBez.appendChild(new Option(b, b)));
-    selBez.addEventListener('change', () => { recalc(); draftDebounce(); });
-    const tdBez = document.createElement('td'); tdBez.appendChild(selBez); tr.appendChild(tdBez);
-    // Gewebe
-    const inpGew = mkT(); inpGew.value = 'nein'; cel(inpGew);
-    // Bohrloch
-    const inpBohr = mkN(); inpBohr.step = '1'; cel(inpBohr);
-    // Zement
-    const inpZem = mkN(); cel(inpZem);
-    // W/Z
-    const inpWZ = mkN(); inpWZ.step = '0.01'; cel(inpWZ);
-    // Lockergestein
-    const inpLv = mkN(); cel(inpLv);
-    const inpLb = mkN(); cel(inpLb);
-    const tdLd = document.createElement('td'); tdLd.className = 'td-diff'; tdLd.textContent = '–'; tr.appendChild(tdLd);
-    // Fels
-    const inpFv = mkN(); cel(inpFv);
-    const inpFb = mkN(); cel(inpFb);
-    const tdFd = document.createElement('td'); tdFd.className = 'td-diff'; tdFd.textContent = '–'; tr.appendChild(tdFd);
-    // Nagel
-    const tdLen = document.createElement('td'); tdLen.className = 'td-len'; tdLen.textContent = '–'; tr.appendChild(tdLen);
-    // Anmerkungen
-    const inpNote = mkT('inp-note'); cel(inpNote);
+    const makeNumber = (cls = '', step = '0.01') => {
+      const inp = document.createElement('input');
+      inp.type = 'number';
+      inp.step = step;
+      inp.inputMode = 'decimal';
+      inp.className = cls;
+      inp.addEventListener('input', onAnyInput);
+      return inp;
+    };
 
+    const makeCell = (child) => {
+      const td = document.createElement('td');
+      if (child) td.appendChild(child);
+      tr.appendChild(td);
+      return td;
+    };
+
+    ref.nr = makeText('inp-nr');
+    makeCell(ref.nr);
+
+    ref.neigung = makeNumber('', '1');
+    makeCell(ref.neigung);
+
+    ref.bez = document.createElement('select');
+    ref.bez.className = 'sel-bez';
+    BEZEICHNUNGEN.forEach((v) => ref.bez.appendChild(new Option(v, v)));
+    ref.bez.addEventListener('change', onAnyInput);
+    makeCell(ref.bez);
+
+    ref.gewebe = makeText('');
+    ref.gewebe.value = 'nein';
+    makeCell(ref.gewebe);
+
+    ref.bohrloch = makeNumber('', '1');
+    makeCell(ref.bohrloch);
+
+    ref.zement = makeNumber('');
+    makeCell(ref.zement);
+
+    ref.wz = makeText('');
+    ref.wz.value = '0,45';
+    makeCell(ref.wz);
+
+    ref.lv = makeNumber('');
+    makeCell(ref.lv);
+
+    ref.lb = makeNumber('');
+    makeCell(ref.lb);
+
+    ref.ld = document.createElement('td');
+    ref.ld.className = 'readonly-cell';
+    ref.ld.textContent = '–';
+    tr.appendChild(ref.ld);
+
+    ref.fv = makeNumber('');
+    makeCell(ref.fv);
+
+    ref.fb = makeNumber('');
+    makeCell(ref.fb);
+
+    ref.fd = document.createElement('td');
+    ref.fd.className = 'readonly-cell';
+    ref.fd.textContent = '–';
+    tr.appendChild(ref.fd);
+
+    ref.len = document.createElement('td');
+    ref.len.className = 'len-cell';
+    ref.len.textContent = '–';
+    tr.appendChild(ref.len);
+
+    ref.note = makeText('inp-note');
+    makeCell(ref.note);
+
+    rowRefs.push(ref);
     tbody.appendChild(tr);
-    rowRefs.push({ inpNr, inpNei, selBez, inpGew, inpBohr, inpZem, inpWZ, inpLv, inpLb, tdLd, inpFv, inpFb, tdFd, tdLen, inpNote });
   }
 }
 
-/* ─── Recalc ───────────────────────────────────── */
-function recalc() {
-  let count = 0, sumCem = 0, sumLen = 0;
-  rowRefs.forEach(r => {
-    const lv = num(r.inpLv.value), lb = num(r.inpLb.value);
-    const fv = num(r.inpFv.value), fb = num(r.inpFb.value);
-    r.tdLd.textContent = (r.inpLv.value !== '' || r.inpLb.value !== '') ? fmtC(Math.max(0, lb - lv)) : '–';
-    r.tdFd.textContent = (r.inpFv.value !== '' || r.inpFb.value !== '') ? fmtC(Math.max(0, fb - fv)) : '–';
-    const len = Math.max(lb, fb);
-    r.tdLen.textContent = len > 0 ? fmtC(len) : '–';
-    const cem = num(r.inpZem.value);
-    const has = r.inpNr.value.trim() !== '' || num(r.inpNei.value) > 0 || (r.selBez.value && r.selBez.value !== '–') || cem > 0 || len > 0;
-    if (has) { count++; sumCem += cem; sumLen += len; }
-  });
-  $('sumCount')  && ($('sumCount').textContent  = count);
-  $('sumCement') && ($('sumCement').textContent = fmtC(sumCem, 2));
-  $('sumLen')    && ($('sumLen').textContent    = fmtC(sumLen, 2));
+function onAnyInput() {
+  recalc();
+  saveDraftDebounced();
 }
 
-/* ─── State ────────────────────────────────────── */
+function rowHasData(r) {
+  return (
+    String(r.nr.value || '').trim() !== '' ||
+    String(r.neigung.value || '').trim() !== '' ||
+    (r.bez.value && r.bez.value !== '–') ||
+    String(r.zement.value || '').trim() !== '' ||
+    String(r.lb.value || '').trim() !== '' ||
+    String(r.fb.value || '').trim() !== '' ||
+    String(r.note.value || '').trim() !== ''
+  );
+}
+
+function recalc() {
+  let count = 0;
+  let sumZement = 0;
+  let sumLen = 0;
+
+  rowRefs.forEach((r) => {
+    const lv = parseNum(r.lv.value);
+    const lb = parseNum(r.lb.value);
+    const fv = parseNum(r.fv.value);
+    const fb = parseNum(r.fb.value);
+
+    const ld = Math.max(0, lb - lv);
+    const fd = Math.max(0, fb - fv);
+    const len = Math.max(lb, fb);
+
+    r.ld.textContent = (r.lv.value !== '' || r.lb.value !== '') ? fmtDE(ld) : '–';
+    r.fd.textContent = (r.fv.value !== '' || r.fb.value !== '') ? fmtDE(fd) : '–';
+    r.len.textContent = len > 0 ? fmtDE(len) : '–';
+
+    if (rowHasData(r)) {
+      count += 1;
+      sumZement += parseNum(r.zement.value);
+      sumLen += len;
+    }
+  });
+
+  $('sumCount').textContent = String(count);
+  $('sumCement').textContent = fmtDE(sumZement);
+  $('sumLen').textContent = fmtDE(sumLen);
+}
+
 function collectState() {
   return {
-    v: 3,
+    v: VERSION,
     meta: {
-      datum:            $('inp-datum')?.value || '',
-      protoNr:          $('inp-proto-nr')?.value || '',
-      baustelle:        $('inp-baustelle')?.value || '',
-      an:               $('inp-an')?.value || '',
-      ag:               $('inp-ag')?.value || '',
-      bohrsystem:       $('inp-bohrsystem')?.value || '',
-      bohrzeitraum:     $('inp-bohrzeitraum')?.value || '',
+      datum: $('inp-datum')?.value || '',
+      protoNr: $('inp-proto-nr')?.value || '',
+      baustelle: $('inp-baustelle')?.value || '',
+      an: $('inp-an')?.value || '',
+      ag: $('inp-ag')?.value || '',
+      bohrsystem: $('inp-bohrsystem')?.value || '',
+      bohrzeitraum: $('inp-bohrzeitraum')?.value || '',
       verpresszeitraum: $('inp-verpresszeitraum')?.value || '',
-      hinweis:          $('inp-hinweis')?.value || '',
-      sigAnName:        $('sigAnName')?.value || '',
-      sigAgName:        $('sigAgName')?.value || '',
+      hinweis: $('inp-hinweis')?.value || '',
+      sigAnName: $('sigAnName')?.value || '',
+      sigAgName: $('sigAgName')?.value || ''
     },
-    nails: rowRefs.map(r => ({
-      nr: r.inpNr.value, nei: r.inpNei.value, bez: r.selBez.value,
-      gew: r.inpGew.value, bohr: r.inpBohr.value, zem: r.inpZem.value,
-      wz: r.inpWZ.value, lv: r.inpLv.value, lb: r.inpLb.value,
-      fv: r.inpFv.value, fb: r.inpFb.value, note: r.inpNote.value,
+    rows: rowRefs.map((r) => ({
+      nr: r.nr.value || '',
+      neigung: r.neigung.value || '',
+      bez: r.bez.value || '–',
+      gewebe: r.gewebe.value || '',
+      bohrloch: r.bohrloch.value || '',
+      zement: r.zement.value || '',
+      wz: r.wz.value || '',
+      lv: r.lv.value || '',
+      lb: r.lb.value || '',
+      fv: r.fv.value || '',
+      fb: r.fb.value || '',
+      note: r.note.value || ''
     })),
-    sign: { an: sigPads.an?.getDataURL?.() || '', ag: sigPads.ag?.getDataURL?.() || '' }
+    sign: {
+      an: sigPads.an?.getDataURL?.() || '',
+      ag: sigPads.ag?.getDataURL?.() || ''
+    }
   };
 }
 
-function applyState(s) {
-  if (!s?.meta) return;
-  const m = s.meta;
-  $('inp-datum').value            = m.datum || '';
-  $('inp-proto-nr').value         = m.protoNr || '';
-  $('inp-baustelle').value        = m.baustelle || '';
-  $('inp-an').value               = m.an || 'HTB Baugesellschaft m.b.H.';
-  $('inp-ag').value               = m.ag || '';
-  $('inp-bohrsystem').value       = m.bohrsystem || '';
-  $('inp-bohrzeitraum').value     = m.bohrzeitraum || '';
-  $('inp-verpresszeitraum').value = m.verpresszeitraum || '';
-  $('inp-hinweis').value          = m.hinweis || '';
-  $('sigAnName').value            = m.sigAnName || '';
-  $('sigAgName').value            = m.sigAgName || '';
-  (s.nails || []).slice(0, ROWS).forEach((n, i) => {
-    const r = rowRefs[i]; if (!r) return;
-    r.inpNr.value   = n.nr   ?? '';  r.inpNei.value  = n.nei  ?? '';
-    r.selBez.value  = n.bez  ?? '–'; r.inpGew.value  = n.gew  ?? 'nein';
-    r.inpBohr.value = n.bohr ?? '';  r.inpZem.value  = n.zem  ?? '';
-    r.inpWZ.value   = n.wz   ?? '';  r.inpLv.value   = n.lv   ?? '';
-    r.inpLb.value   = n.lb   ?? '';  r.inpFv.value   = n.fv   ?? '';
-    r.inpFb.value   = n.fb   ?? '';  r.inpNote.value = n.note ?? '';
+function applyState(state) {
+  if (!state || !state.meta) return;
+
+  $('inp-datum').value = state.meta.datum || '';
+  $('inp-proto-nr').value = state.meta.protoNr || '';
+  $('inp-baustelle').value = state.meta.baustelle || '';
+  $('inp-an').value = state.meta.an || 'HTB Baugesellschaft m.b.H.';
+  $('inp-ag').value = state.meta.ag || '';
+  $('inp-bohrsystem').value = state.meta.bohrsystem || '';
+  $('inp-bohrzeitraum').value = state.meta.bohrzeitraum || '';
+  $('inp-verpresszeitraum').value = state.meta.verpresszeitraum || '';
+  $('inp-hinweis').value = state.meta.hinweis || '';
+  $('sigAnName').value = state.meta.sigAnName || '';
+  $('sigAgName').value = state.meta.sigAgName || '';
+
+  (state.rows || []).slice(0, ROWS).forEach((row, i) => {
+    const r = rowRefs[i];
+    if (!r) return;
+    r.nr.value = row.nr ?? '';
+    r.neigung.value = row.neigung ?? '';
+    r.bez.value = row.bez ?? '–';
+    r.gewebe.value = row.gewebe ?? 'nein';
+    r.bohrloch.value = row.bohrloch ?? '';
+    r.zement.value = row.zement ?? '';
+    r.wz.value = row.wz ?? '';
+    r.lv.value = row.lv ?? '';
+    r.lb.value = row.lb ?? '';
+    r.fv.value = row.fv ?? '';
+    r.fb.value = row.fb ?? '';
+    r.note.value = row.note ?? '';
   });
-  sigPads.an?.setFromDataURL?.(s.sign?.an || '');
-  sigPads.ag?.setFromDataURL?.(s.sign?.ag || '');
+
+  sigPads.an?.setFromDataURL?.(state.sign?.an || '');
+  sigPads.ag?.setFromDataURL?.(state.sign?.ag || '');
   recalc();
 }
 
-let _dT = null;
-function draftDebounce() {
-  clearTimeout(_dT);
-  _dT = setTimeout(() => { try { localStorage.setItem(STORAGE_DRAFT, JSON.stringify(collectState())); } catch {} }, 300);
-}
+const saveDraftDebounced = debounce(() => {
+  try {
+    localStorage.setItem(STORAGE_DRAFT, JSON.stringify(collectState()));
+  } catch {}
+}, 250);
+
 function loadDraft() {
-  try { const r = localStorage.getItem(STORAGE_DRAFT); if (r) applyState(JSON.parse(r)); } catch {}
+  try {
+    const raw = localStorage.getItem(STORAGE_DRAFT);
+    if (raw) applyState(JSON.parse(raw));
+  } catch {}
 }
 
-/* ─── History ──────────────────────────────────── */
-function readHist() { try { return JSON.parse(localStorage.getItem(STORAGE_HISTORY) || '[]'); } catch { return []; } }
-function writeHist(l) { try { localStorage.setItem(STORAGE_HISTORY, JSON.stringify(l.slice(0, HISTORY_MAX))); } catch {} }
+function readHistory() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_HISTORY) || '[]');
+  } catch {
+    return [];
+  }
+}
 
-function sumsOf(snap) {
-  let cnt = 0, cem = 0, len = 0;
-  (snap.nails || []).forEach(n => {
-    const L = Math.max(num(n.lb), num(n.fb)), C = num(n.zem);
-    const has = (n.nr || '').trim() !== '' || num(n.nei) > 0 || C > 0 || L > 0;
-    if (has) { cnt++; cem += C; len += L; }
+function writeHistory(list) {
+  try {
+    localStorage.setItem(STORAGE_HISTORY, JSON.stringify(list.slice(0, HISTORY_MAX)));
+  } catch {}
+}
+
+function getSnapshotSums(snap) {
+  let count = 0;
+  let sumZement = 0;
+  let sumLen = 0;
+
+  (snap.rows || []).forEach((r) => {
+    const has = (
+      String(r.nr || '').trim() !== '' ||
+      String(r.neigung || '').trim() !== '' ||
+      (r.bez && r.bez !== '–') ||
+      String(r.zement || '').trim() !== '' ||
+      String(r.lb || '').trim() !== '' ||
+      String(r.fb || '').trim() !== ''
+    );
+
+    const len = Math.max(parseNum(r.lb), parseNum(r.fb));
+    const zem = parseNum(r.zement);
+
+    if (has) {
+      count += 1;
+      sumZement += zem;
+      sumLen += len;
+    }
   });
-  return { cnt, cem, len };
+
+  return { count, sumZement, sumLen };
 }
 
 function saveToHistory() {
-  const snap = collectState(), sums = sumsOf(snap);
-  const title = `${snap.meta.baustelle || '—'} · Nr. ${snap.meta.protoNr || '—'} · ${dateDE(snap.meta.datum)}`;
-  writeHist([{ id: uid(), savedAt: Date.now(), title, snap, sums }, ...readHist()]);
+  const snap = collectState();
+  const sums = getSnapshotSums(snap);
+  const entry = {
+    id: uid(),
+    savedAt: Date.now(),
+    title: `${snap.meta.baustelle || '—'} · Prot ${snap.meta.protoNr || '—'} · ${dateDE(snap.meta.datum)}`,
+    snap,
+    sums
+  };
+
+  const list = readHistory();
+  list.unshift(entry);
+  writeHistory(list);
   renderHistory();
 }
 
 function renderHistory() {
-  const host = $('historyList'); if (!host) return;
-  const list = readHist();
-  if (!list.length) { host.innerHTML = '<div class="historyItem"><div class="historySub">Noch keine Protokolle gespeichert.</div></div>'; return; }
+  const host = $('historyList');
+  if (!host) return;
+
+  const list = readHistory();
+  if (!list.length) {
+    host.innerHTML = `<div class="historyItem"><div class="historySub">Noch keine Protokolle gespeichert.</div></div>`;
+    return;
+  }
+
   host.innerHTML = '';
-  list.forEach(entry => {
-    const s = entry.sums || sumsOf(entry.snap);
-    const div = document.createElement('div'); div.className = 'historyItem';
+
+  list.forEach((entry) => {
+    const div = document.createElement('div');
+    div.className = 'historyItem';
     div.innerHTML = `
       <div class="historyTop">
         <span>${entry.title}</span>
         <span style="color:var(--muted);font-size:.82em">${new Date(entry.savedAt).toLocaleString('de-DE')}</span>
       </div>
-      <div class="historySub">Nägel: <b>${s.cnt}</b> · Zement: <b>${fmtC(s.cem,2)} kg</b> · Länge: <b>${fmtC(s.len,2)} m</b></div>
+      <div class="historySub">
+        Nägel: <b>${entry.sums.count}</b> ·
+        Zement: <b>${fmtDE(entry.sums.sumZement)} kg</b> ·
+        Nagellänge: <b>${fmtDE(entry.sums.sumLen)} m</b>
+      </div>
       <div class="historyBtns">
-        <button class="btn btn--ghost" data-act="load" data-id="${entry.id}">Laden</button>
-        <button class="btn btn--ghost" data-act="pdf"  data-id="${entry.id}">PDF</button>
-        <button class="btn btn--ghost" data-act="del"  data-id="${entry.id}">Löschen</button>
-      </div>`;
+        <button class="btn btn--ghost" type="button" data-act="load" data-id="${entry.id}">Laden</button>
+        <button class="btn btn--ghost" type="button" data-act="pdf" data-id="${entry.id}">PDF</button>
+        <button class="btn btn--ghost" type="button" data-act="del" data-id="${entry.id}">Löschen</button>
+      </div>
+    `;
     host.appendChild(div);
   });
-  host.querySelectorAll('button[data-act]').forEach(b => {
-    b.addEventListener('click', async () => {
-      const { id, act } = b.dataset;
-      if (act === 'del') { writeHist(readHist().filter(e => e.id !== id)); renderHistory(); }
-      if (act === 'load') { const e = readHist().find(e => e.id === id); if (e) { applyState(e.snap); draftDebounce(); document.querySelector('.tab[data-tab="protokoll"]')?.click(); } }
-      if (act === 'pdf')  { const e = readHist().find(e => e.id === id); if (e) await exportPdf(e.snap); }
+
+  host.querySelectorAll('button[data-act]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.id;
+      const act = btn.dataset.act;
+      const list2 = readHistory();
+      const entry = list2.find((e) => e.id === id);
+
+      if (act === 'load' && entry) {
+        applyState(entry.snap);
+        saveDraftDebounced();
+        document.querySelector('.tab[data-tab="protokoll"]')?.click();
+      }
+
+      if (act === 'pdf' && entry) {
+        await exportPdf(entry.snap);
+      }
+
+      if (act === 'del') {
+        writeHistory(list2.filter((e) => e.id !== id));
+        renderHistory();
+      }
     });
   });
 }
 
-/* ─── Signature Pads ───────────────────────────── */
-function initSigPads() {
-  sigPads.an = makePad($('sigAnCanvas'), draftDebounce);
-  sigPads.ag = makePad($('sigAgCanvas'), draftDebounce);
-  $('sigAnClear')?.addEventListener('click', () => sigPads.an.clear());
-  $('sigAgClear')?.addEventListener('click', () => sigPads.ag.clear());
+function resizeCanvasForHiDPI(canvas) {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  const w = Math.max(10, Math.floor(rect.width * dpr));
+  const h = Math.max(10, Math.floor(rect.height * dpr));
+
+  if (canvas.width === w && canvas.height === h) return;
+  canvas.width = w;
+  canvas.height = h;
+
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
-function makePad(canvas, onChange) {
-  if (!canvas) return { getDataURL: () => '', setFromDataURL: () => {}, clear: () => {} };
+function fillWhite(canvas) {
   const ctx = canvas.getContext('2d');
-  let drawing = false, last = null, signed = false;
+  const rect = canvas.getBoundingClientRect();
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, rect.width, rect.height);
+  canvas.dataset.bg = '1';
+}
+
+function makeSignaturePad(canvas, onChange) {
+  const ctx = canvas.getContext('2d');
+  canvas.style.touchAction = 'none';
+
+  let drawing = false;
+  let last = null;
+  let signed = false;
+
   function prep() {
-    const dpr = window.devicePixelRatio || 1;
-    const r = canvas.getBoundingClientRect();
-    const w = Math.max(10, Math.floor(r.width * dpr)), h = Math.max(10, Math.floor(r.height * dpr));
-    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
-    if (!canvas.dataset.bg) { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, r.width, r.height); canvas.dataset.bg = '1'; }
-    ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#000';
+    resizeCanvasForHiDPI(canvas);
+    if (canvas.dataset.bg !== '1') fillWhite(canvas);
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#000';
   }
-  function pos(e) { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
-  canvas.addEventListener('pointerdown', e => { e.preventDefault(); prep(); drawing = true; last = pos(e); canvas.setPointerCapture?.(e.pointerId); });
-  canvas.addEventListener('pointermove', e => { if (!drawing) return; e.preventDefault(); const p = pos(e); ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(p.x, p.y); ctx.stroke(); last = p; signed = true; });
-  const end = e => { if (!drawing) return; e?.preventDefault?.(); drawing = false; last = null; onChange?.(); };
-  canvas.addEventListener('pointerup', end); canvas.addEventListener('pointercancel', end); canvas.addEventListener('pointerleave', end);
+
+  function pos(e) {
+    const rect = canvas.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
+
+  canvas.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    prep();
+    drawing = true;
+    last = pos(e);
+    canvas.setPointerCapture?.(e.pointerId);
+  });
+
+  canvas.addEventListener('pointermove', (e) => {
+    if (!drawing) return;
+    e.preventDefault();
+    const p = pos(e);
+    ctx.beginPath();
+    ctx.moveTo(last.x, last.y);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    last = p;
+    signed = true;
+  });
+
+  function end(e) {
+    if (!drawing) return;
+    e?.preventDefault?.();
+    drawing = false;
+    last = null;
+    onChange?.();
+  }
+
+  canvas.addEventListener('pointerup', end);
+  canvas.addEventListener('pointercancel', end);
+  canvas.addEventListener('pointerleave', end);
+
   return {
-    clear() { prep(); const r = canvas.getBoundingClientRect(); ctx.clearRect(0, 0, r.width, r.height); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, r.width, r.height); signed = false; onChange?.(); },
-    getDataURL() { return signed ? canvas.toDataURL('image/png') : ''; },
-    setFromDataURL(url) {
-      prep(); const r = canvas.getBoundingClientRect();
-      ctx.clearRect(0, 0, r.width, r.height); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, r.width, r.height);
-      if (!url) { signed = false; return; }
-      const img = new Image(); img.onload = () => { ctx.drawImage(img, 0, 0, r.width, r.height); signed = true; }; img.src = url;
+    clear() {
+      prep();
+      const rect = canvas.getBoundingClientRect();
+      ctx.clearRect(0, 0, rect.width, rect.height);
+      fillWhite(canvas);
+      signed = false;
+      onChange?.();
+    },
+    getDataURL() {
+      if (!signed) return '';
+      return canvas.toDataURL('image/png');
+    },
+    setFromDataURL(dataURL) {
+      prep();
+      const rect = canvas.getBoundingClientRect();
+      ctx.clearRect(0, 0, rect.width, rect.height);
+      fillWhite(canvas);
+      if (!dataURL) {
+        signed = false;
+        return;
+      }
+      const img = new Image();
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0, rect.width, rect.height);
+        signed = true;
+      };
+      img.src = dataURL;
     }
   };
 }
 
-/* ─────────────────────────────────────────────────
-   PDF EXPORT – 1:1 nach Vorlage Bohrprotokoll SSZ 1.5
-   A4 Querformat 841,89 × 595,28 pt
-───────────────────────────────────────────────── */
-function u8fromDataURL(url) {
-  const b64 = String(url || '').split(',')[1]; if (!b64) return null;
-  const bin = atob(b64), u8 = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
-  return u8;
+function initSignaturePads() {
+  sigPads.an = makeSignaturePad($('sigAnCanvas'), saveDraftDebounced);
+  sigPads.ag = makeSignaturePad($('sigAgCanvas'), saveDraftDebounced);
+
+  $('sigAnClear')?.addEventListener('click', () => sigPads.an.clear());
+  $('sigAgClear')?.addEventListener('click', () => sigPads.ag.clear());
 }
 
-async function exportPdf(optSnap) {
-  const snap = optSnap || collectState();
+function dataURLtoUint8(dataURL) {
+  const b64 = String(dataURL || '').split(',')[1];
+  if (!b64) return null;
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+}
+
+async function exportPdf(snapArg = null) {
+  const snap = snapArg || collectState();
   const meta = snap.meta || {};
 
-  if (!window.PDFLib) { alert('PDF-Library lädt noch – bitte kurz warten.'); return; }
-  const { PDFDocument, rgb, StandardFonts } = window.PDFLib;
+  if (!window.PDFLib) {
+    alert('PDF-Library noch nicht geladen.');
+    return;
+  }
+
+  const { PDFDocument, StandardFonts, rgb } = window.PDFLib;
   const pdf = await PDFDocument.create();
-  if (window.fontkit) pdf.registerFontkit(window.fontkit);
 
-  /* Fonts */
-  let fR, fB;
-  try {
-    const arB = await fetch('arial.ttf').then(r => { if (!r.ok) throw 0; return r.arrayBuffer(); });
-    fR = await pdf.embedFont(arB, { subset: true });
-    const abB = await fetch('ARIALBD.TTF').then(r => r.ok ? r.arrayBuffer() : null);
-    fB = abB ? await pdf.embedFont(abB, { subset: true }) : fR;
-  } catch {
-    fR = await pdf.embedFont(StandardFonts.Helvetica);
-    fB = await pdf.embedFont(StandardFonts.HelveticaBold);
-  }
+  const fontR = await pdf.embedFont(StandardFonts.Helvetica);
+  const fontB = await pdf.embedFont(StandardFonts.HelveticaBold);
 
-  /* Logo – erst logo.png versuchen, dann SVG rendern */
-  let logoImg = null;
+  let logo = null;
   try {
-    const lb = await fetch('logo.png').then(r => r.ok ? r.arrayBuffer() : null);
-    if (lb) logoImg = await pdf.embedPng(lb);
+    const pngBytes = await svgToPngBytes(LOGO_SVG, 512, 512);
+    if (pngBytes) logo = await pdf.embedPng(pngBytes);
   } catch {}
-  if (!logoImg) {
-    try {
-      const pngBytes = await svgToPngBytes(HTB_LOGO_SVG, 512, 512);
-      if (pngBytes) logoImg = await pdf.embedPng(pngBytes);
-    } catch {}
+
+  const pageW = 841.89;
+  const pageH = 595.28;
+  const page = pdf.addPage([pageW, pageH]);
+
+  const K = rgb(0, 0, 0);
+  const G = rgb(0.92, 0.92, 0.92);
+  const G2 = rgb(0.85, 0.85, 0.85);
+  const B = rgb(0.86, 0.92, 0.98);
+  const GR = rgb(0.86, 0.96, 0.88);
+  const W = rgb(1, 1, 1);
+
+  const left = mm(8);
+  const bottom = mm(7);
+  const width = mm(281);
+  const height = pageH - mm(14);
+  const top = bottom + height;
+
+  const row1H = mm(10);
+  const row2H = mm(8);
+  const row3H = meta.hinweis ? mm(7) : 0;
+  const groupH = mm(7);
+  const colH = mm(8);
+  const sum1H = mm(8);
+  const sum2H = mm(8);
+  const sigH = mm(18);
+
+  const dataRowH = (height - row1H - row2H - row3H - groupH - colH - sum1H - sum2H - sigH) / ROWS;
+
+  function drawRect(x, yTop, w, h, fill, borderWidth = 0.5) {
+    page.drawRectangle({
+      x,
+      y: yTop - h,
+      width: w,
+      height: h,
+      color: fill || undefined,
+      borderColor: K,
+      borderWidth
+    });
   }
 
-  /* Seite: A4 Querformat */
-  const PW = 841.89, PH = 595.28;
-  const page = pdf.addPage([PW, PH]);
-  const mm = v => v * 72 / 25.4;
+  function fitText(text, font, size, maxWidth) {
+    let s = String(text ?? '');
+    if (!s) return '';
+    const measure = (t) => font.widthOfTextAtSize(t, size);
 
-  /* Farben */
-  const K       = rgb(0, 0, 0);
-  const WHITE   = rgb(1, 1, 1);
-  const LGREY   = rgb(0.82, 0.82, 0.82);  /* Header-Hintergrund */
-  const MGREY   = rgb(0.93, 0.93, 0.93);  /* Tabellenkopf */
-  const BLUE_BG = rgb(0.85, 0.92, 0.98);  /* Lockergestein-Gruppe */
-  const GREN_BG = rgb(0.85, 0.96, 0.88);  /* Fels-Gruppe */
-  const YELL    = rgb(1.0, 0.929, 0.0);   /* HTB Gelb */
+    if (measure(s) <= maxWidth) return s;
 
-  /* Ränder */
-  const ML = mm(8), MR = mm(8), MT = mm(7), MB = mm(7);
-  const X0 = ML, Y0 = MB;
-  const TW = PW - ML - MR;   /* Tabellenbreite */
-  const TH = PH - MT - MB;   /* Tabellenhöhe */
-
-  /* ── Hilfsfunktionen ── */
-  const line = (x1, y1, x2, y2, t = 0.5, col = K) =>
-    page.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, thickness: t, color: col });
-  const rect = (x, y, w, h, opts = {}) =>
-    page.drawRectangle({ x, y, width: Math.max(0.1, w), height: Math.max(0.1, h), ...opts });
-
-  /* Text mit harter Breitengrenze – trunciert mit '…' wenn nötig */
-  function clipText(txt, x, y, maxW, font, sz, col = K, align = 'left') {
-    let s = String(txt ?? '').trim(); if (!s) return;
-    const measure = t => { try { return font.widthOfTextAtSize(t, sz); } catch { return s.length * sz * 0.55; } };
-    while (s.length > 1 && measure(s) > maxW - 1) s = s.slice(0, -1);
-    if (String(txt).trim() !== s && s.length > 1) s = s.slice(0, -1) + '…';
-    let dx = x;
-    if (align === 'center') dx = x + (maxW - measure(s)) / 2;
-    else if (align === 'right') dx = x + maxW - measure(s);
-    page.drawText(s, { x: Math.max(X0, dx), y, size: sz, font, color: col });
+    while (s.length > 1 && measure(s + '…') > maxWidth) {
+      s = s.slice(0, -1);
+    }
+    return s ? `${s}…` : '';
   }
 
-  /* ═══════════════════════════════════════════════
-     KOPFBEREICH (nach Vorlage [10])
-  ═══════════════════════════════════════════════ */
-  const HDR_H1 = mm(10);   /* Zeile 1: AN / Nr / AG */
-  const HDR_H2 = mm(8);    /* Zeile 2: Bohrsystem / Baustelle */
-  const HDR_H3 = mm(7);    /* Zeile 3: Hinweiszeile (optional) */
-  const LOGO_W = mm(28);   /* Logo-Block links */
+  function drawTextCell(text, x, yTop, w, h, font, size, align = 'left', pad = mm(0.8)) {
+    const raw = String(text ?? '').trim();
+    if (!raw) return;
+    const maxW = Math.max(1, w - pad * 2);
+    const fitted = fitText(raw, font, size, maxW);
+    const tw = font.widthOfTextAtSize(fitted, size);
+    let tx = x + pad;
 
-  const hdr1Y = Y0 + TH - HDR_H1;
-  const hdr2Y = hdr1Y - HDR_H2;
+    if (align === 'center') tx = x + (w - tw) / 2;
+    if (align === 'right') tx = x + w - pad - tw;
 
-  /* Logo-Block */
-  rect(X0, hdr1Y, LOGO_W, HDR_H1, { color: LGREY, borderColor: K, borderWidth: 0.8 });
-  if (logoImg) {
-    const lh = HDR_H1 * 0.80;
-    const sc = lh / logoImg.height;
-    const lw = logoImg.width * sc;
-    const lx = X0 + (LOGO_W - lw) / 2;
-    const ly = hdr1Y + (HDR_H1 - lh) / 2;
-    /* Gelber Hintergrund hinter Logo */
-    rect(lx - 2, ly - 1, lw + 4, lh + 2, { color: YELL });
-    page.drawImage(logoImg, { x: lx, y: ly, width: lw, height: lh });
-  } else {
-    rect(X0, hdr1Y, LOGO_W, HDR_H1, { color: YELL, borderColor: K, borderWidth: 0.8 });
-    clipText('HTB', X0 + mm(2), hdr1Y + mm(3), LOGO_W - mm(4), fB, 11);
+    const ty = yTop - h + (h - size) / 2 + 1.5;
+    page.drawText(fitted, { x: tx, y: ty, size, font, color: K });
   }
 
-  /* Kopfzeile 1: Auftragnehmer | Bohrprotokoll Nr. | Auftraggeber */
-  const hdrRestW = TW - LOGO_W;
-  const COL3 = hdrRestW / 3;
-  const hX = X0 + LOGO_W;
+  function drawMultiCell(lines, x, yTop, w, h, font, size) {
+    const arr = Array.isArray(lines) ? lines.filter(Boolean) : [String(lines)];
+    if (!arr.length) return;
+    const lineGap = size + 1;
+    const total = arr.length * lineGap;
+    const startY = yTop - h + (h - total) / 2 + lineGap - 1;
 
-  rect(hX, hdr1Y, hdrRestW, HDR_H1, { color: LGREY, borderColor: K, borderWidth: 0.8 });
-  line(hX + COL3, hdr1Y, hX + COL3, hdr1Y + HDR_H1);
-  line(hX + COL3 * 2, hdr1Y, hX + COL3 * 2, hdr1Y + HDR_H1);
-
-  const hy1 = hdr1Y + mm(2.8);
-  const PAD = mm(1.5);
-
-  /* Spalte 1: Auftragnehmer */
-  clipText('Auftragnehmer:', hX + PAD, hy1, mm(26), fB, 7);
-  clipText(meta.an || '', hX + mm(27), hy1, COL3 - mm(28), fR, 8);
-
-  /* Spalte 2: Bohrprotokoll Nr. */
-  const c2x = hX + COL3;
-  clipText('Bohrprotokoll Nr.:', c2x + PAD, hy1, mm(30), fB, 7);
-  clipText(meta.protoNr || '', c2x + mm(31), hy1, COL3 - mm(32), fB, 9);
-
-  /* Spalte 3: Auftraggeber */
-  const c3x = hX + COL3 * 2;
-  clipText('Auftraggeber:', c3x + PAD, hy1, mm(22), fB, 7);
-  clipText(meta.ag || '', c3x + mm(23), hy1, COL3 - mm(24), fR, 8);
-
-  /* Kopfzeile 2: Bohrsystem | (leer) | Baustelle */
-  rect(X0, hdr2Y, TW, HDR_H2, { color: MGREY, borderColor: K, borderWidth: 0.8 });
-  line(hX + COL3,     hdr2Y, hX + COL3,     hdr2Y + HDR_H2);
-  line(hX + COL3 * 2, hdr2Y, hX + COL3 * 2, hdr2Y + HDR_H2);
-
-  const hy2 = hdr2Y + mm(2.2);
-  clipText('Bohrsystem:', X0 + PAD, hy2, mm(22), fB, 7);
-  clipText(meta.bohrsystem || '', X0 + mm(22), hy2, LOGO_W + COL3 - mm(23), fR, 7.5);
-  clipText('Baustelle:', c3x + PAD, hy2, mm(18), fB, 7);
-  clipText(meta.baustelle || '', c3x + mm(19), hy2, COL3 - mm(20), fR, 7.5);
-
-  /* Kopfzeile 3: Hinweis (optional) */
-  let tableTopY = hdr2Y;
-  if (meta.hinweis && meta.hinweis.trim()) {
-    const hdr3Y = hdr2Y - HDR_H3;
-    rect(X0, hdr3Y, TW, HDR_H3, { color: WHITE, borderColor: K, borderWidth: 0.8 });
-    clipText(meta.hinweis, X0 + PAD, hdr3Y + mm(2), TW - PAD * 2, fR, 7, rgb(0.3, 0.3, 0.3));
-    tableTopY = hdr3Y;
+    arr.forEach((line, idx) => {
+      const fitted = fitText(line, font, size, w - mm(1.6));
+      const tw = font.widthOfTextAtSize(fitted, size);
+      page.drawText(fitted, {
+        x: x + (w - tw) / 2,
+        y: startY + (arr.length - 1 - idx) * lineGap,
+        size,
+        font,
+        color: K
+      });
+    });
   }
 
-  /* ═══════════════════════════════════════════════
-     SPALTEN-LAYOUT (exakt wie Vorlage [10])
-     Summe muss = TW
-  ═══════════════════════════════════════════════ */
-  /* Breiten in mm */
-  const CW_MM = [
-    14,   /* 0  Nr. */
-    11,   /* 1  Neigung */
-    25,   /* 2  Bezeichnung */
-    14,   /* 3  Gewebe */
-    14,   /* 4  Bohrloch */
-    15,   /* 5  Zement */
-    11,   /* 6  W/Z */
-    13,   /* 7  Lock-von */
-    13,   /* 8  Lock-bis */
-    13,   /* 9  Lock-diff */
-    13,   /* 10 Fels-von */
-    13,   /* 11 Fels-bis */
-    13,   /* 12 Fels-diff */
-    13,   /* 13 Nagel */
-    0,    /* 14 Anmerkungen = Rest */
-  ];
-  /* Gesamtbreite fest = TW (pt) */
-  const fixMM = CW_MM.slice(0, 14).reduce((a, b) => a + b, 0);
-  CW_MM[14] = (TW / mm(1)) - fixMM;  /* Rest in mm */
+  page.drawRectangle({
+    x: left,
+    y: bottom,
+    width,
+    height,
+    borderColor: K,
+    borderWidth: 1
+  });
 
-  const CW = CW_MM.map(v => mm(v));  /* pt */
-  const CX = [];
-  let cx = X0;
-  CW.forEach(w => { CX.push(cx); cx += w; });
+  let y = top;
 
-  /* ═══════════════════════════════════════════════
-     TABELLEN-HEADER (2 Zeilen)
-  ═══════════════════════════════════════════════ */
-  const TH1_H = mm(7);   /* Gruppenzeile */
-  const TH2_H = mm(10);  /* Spaltenzeile */
+  const logoW = mm(28);
+  const restW = width - logoW;
+  const c1 = mm(110);
+  const c2 = mm(55);
+  const c3 = restW - c1 - c2;
 
-  const th1Y = tableTopY - TH1_H;
-  const th2Y = th1Y - TH2_H;
+  drawRect(left, y, logoW, row1H, G2, 0.8);
+  drawRect(left + logoW, y, restW, row1H, G2, 0.8);
 
-  /* Gruppen-Hintergründe */
-  /* Nageldaten (Spalten 0–6) */
-  const nageldatenW = CW.slice(0, 7).reduce((a, b) => a + b, 0);
-  rect(CX[0], th1Y, nageldatenW, TH1_H, { color: MGREY, borderColor: K, borderWidth: 0.5 });
+  page.drawLine({ start: { x: left + logoW + c1, y: y - row1H }, end: { x: left + logoW + c1, y }, thickness: 0.5, color: K });
+  page.drawLine({ start: { x: left + logoW + c1 + c2, y: y - row1H }, end: { x: left + logoW + c1 + c2, y }, thickness: 0.5, color: K });
 
-  /* Lockergestein (Spalten 7–9) */
-  const lockW = CW[7] + CW[8] + CW[9];
-  rect(CX[7], th1Y, lockW, TH1_H, { color: BLUE_BG, borderColor: K, borderWidth: 0.5 });
+  if (logo) {
+    const h = row1H * 0.78;
+    const scale = h / logo.height;
+    const w = logo.width * scale;
+    page.drawImage(logo, {
+      x: left + (logoW - w) / 2,
+      y: y - row1H + (row1H - h) / 2,
+      width: w,
+      height: h
+    });
+  }
 
-  /* Fels (Spalten 10–12) */
-  const felsW = CW[10] + CW[11] + CW[12];
-  rect(CX[10], th1Y, felsW, TH1_H, { color: GREN_BG, borderColor: K, borderWidth: 0.5 });
+  drawTextCell('Auftragnehmer:', left + logoW, y, mm(25), row1H, fontB, 7);
+  drawTextCell(meta.an || '', left + logoW + mm(25), y, c1 - mm(25), row1H, fontR, 8);
 
-  /* Nagel + Anmerkungen (Spalten 13–14) */
-  const restW = CW[13] + CW[14];
-  rect(CX[13], th1Y, restW, TH1_H, { color: MGREY, borderColor: K, borderWidth: 0.5 });
+  drawTextCell('Bohrprotokoll Nr.:', left + logoW + c1, y, mm(30), row1H, fontB, 7);
+  drawTextCell(meta.protoNr || '', left + logoW + c1 + mm(30), y, c2 - mm(30), row1H, fontB, 9);
 
-  /* Gruppentext */
-  clipText('Nageldaten', CX[0] + PAD, th1Y + mm(2), nageldatenW - PAD * 2, fB, 7);
-  clipText('Lockergestein', CX[7] + mm(1), th1Y + mm(2), lockW - mm(2), fB, 7, K, 'center');
-  clipText('Fels', CX[10] + mm(1), th1Y + mm(2), felsW - mm(2), fB, 7, K, 'center');
+  drawTextCell('Auftraggeber:', left + logoW + c1 + c2, y, mm(22), row1H, fontB, 7);
+  drawTextCell(meta.ag || '', left + logoW + c1 + c2 + mm(22), y, c3 - mm(22), row1H, fontR, 8);
 
-  /* Spaltenzeile (Zeile 2) */
-  rect(X0, th2Y, TW, TH2_H, { color: MGREY, borderColor: K, borderWidth: 0.8 });
-  line(X0, th1Y, X0 + TW, th1Y, 0.8);
+  y -= row1H;
 
-  const colLabels = [
+  const row2Left = mm(160);
+  const row2Right = width - row2Left;
+
+  drawRect(left, y, width, row2H, G, 0.8);
+  page.drawLine({ start: { x: left + row2Left, y: y - row2H }, end: { x: left + row2Left, y }, thickness: 0.5, color: K });
+
+  drawTextCell('Bohrsystem:', left, y, mm(20), row2H, fontB, 7);
+  drawTextCell(meta.bohrsystem || '', left + mm(20), y, row2Left - mm(20), row2H, fontR, 7.5);
+
+  drawTextCell('Baustelle:', left + row2Left, y, mm(18), row2H, fontB, 7);
+  drawTextCell(meta.baustelle || '', left + row2Left + mm(18), y, row2Right - mm(18), row2H, fontR, 7.5);
+
+  y -= row2H;
+
+  if (row3H > 0) {
+    drawRect(left, y, width, row3H, W, 0.8);
+    drawTextCell(meta.hinweis || '', left, y, width, row3H, fontR, 7);
+    y -= row3H;
+  }
+
+  const colMM = [14, 14, 25, 15, 15, 16, 12, 13, 13, 13, 13, 13, 13, 14, 78];
+  const col = colMM.map(mm);
+  const xPos = [];
+  let run = left;
+  col.forEach((w) => {
+    xPos.push(run);
+    run += w;
+  });
+
+  const nagelDataW = col.slice(0, 7).reduce((a, b) => a + b, 0);
+  const lockW = col[7] + col[8] + col[9];
+  const felsW = col[10] + col[11] + col[12];
+
+  drawRect(left, y, nagelDataW, groupH, G, 0.8);
+  drawRect(xPos[7], y, lockW, groupH, B, 0.8);
+  drawRect(xPos[10], y, felsW, groupH, GR, 0.8);
+  drawRect(xPos[13], y, col[13], groupH, G, 0.8);
+  drawRect(xPos[14], y, col[14], groupH, G, 0.8);
+
+  drawTextCell('Nageldaten', left, y, nagelDataW, groupH, fontB, 7, 'center');
+  drawTextCell('Lockergestein', xPos[7], y, lockW, groupH, fontB, 7, 'center');
+  drawTextCell('Fels', xPos[10], y, felsW, groupH, fontB, 7, 'center');
+  drawTextCell('Nagel [m]', xPos[13], y, col[13], groupH, fontB, 6.5, 'center');
+  drawTextCell('Anmerkungen', xPos[14], y, col[14], groupH, fontB, 6.5, 'center');
+
+  y -= groupH;
+
+  drawRect(left, y, width, colH, G, 0.8);
+  for (let i = 1; i < xPos.length; i++) {
+    page.drawLine({ start: { x: xPos[i], y: y - colH }, end: { x: xPos[i], y }, thickness: 0.5, color: K });
+  }
+
+  const labels = [
     ['Nr.'],
     ['Neigung', '[°]'],
     ['Bezeichnung'],
@@ -558,104 +806,255 @@ async function exportPdf(optSnap) {
     ['von [m]'],
     ['bis [m]'],
     ['Diff. [m]'],
-    ['Nagel', '[m]'],
-    ['Anmerkungen'],
+    [''],
+    ['']
   ];
 
-  colLabels.forEach((lines, i) => {
-    const cellW = CW[i];
-    if (i > 0) line(CX[i], th2Y, CX[i], tableTopY, 0.5);
-    const totalLines = lines.length;
-    const lineH = mm(3.5);
-    const startY = th2Y + (TH2_H - totalLines * lineH) / 2 + (totalLines === 1 ? lineH * 0.3 : 0);
-    lines.forEach((lbl, li) => {
-      clipText(lbl, CX[i] + mm(0.8), startY + (totalLines - 1 - li) * lineH, cellW - mm(1.6), fB, 6.5, K, 'center');
-    });
+  labels.forEach((lines, i) => {
+    if (i >= 13) return;
+    drawMultiCell(lines, xPos[i], y, col[i], colH, fontB, 6.2);
   });
 
-  line(X0, th2Y, X0 + TW, th2Y, 0.8);
-  line(X0, tableTopY, X0 + TW, tableTopY, 0.8);
+  y -= colH;
 
-  /* ═══════════════════════════════════════════════
-     DATEN-BEREICH (25 Zeilen)
-  ═══════════════════════════════════════════════ */
-  const FOOT_H  = mm(9);    /* Summenzeile */
-  const SIG_H   = mm(22);   /* Signaturblock */
-  const tableBottomY = Y0 + FOOT_H + SIG_H;
-  const dataH = th2Y - tableBottomY;
-  const rowH  = dataH / ROWS;
-
-  const nails = (snap.nails || []).slice(0, ROWS);
+  const rows = (snap.rows || []).slice(0, ROWS);
 
   for (let i = 0; i < ROWS; i++) {
-    const n = nails[i] || {};
-    const rowY = th2Y - (i + 1) * rowH;
+    const r = rows[i] || {};
+    const fill = i % 2 === 0 ? rgb(0.98, 0.98, 0.98) : W;
+    drawRect(left, y, width, dataRowH, fill, 0.3);
 
-    /* Zebrierung */
-    if (i % 2 === 0) {
-      rect(X0, rowY, TW, rowH, { color: rgb(0.975, 0.975, 0.975) });
+    for (let c = 1; c < xPos.length; c++) {
+      page.drawLine({
+        start: { x: xPos[c], y: y - dataRowH },
+        end: { x: xPos[c], y: y },
+        thickness: 0.25,
+        color: K
+      });
     }
 
-    /* Zeilentrennlinie */
-    line(X0, rowY, X0 + TW, rowY, 0.35, rgb(0.65, 0.65, 0.65));
-
-    /* Spaltenlinien */
-    CX.forEach((cx, ci) => { if (ci > 0) line(cx, rowY, cx, rowY + rowH, 0.35, rgb(0.65, 0.65, 0.65)); });
-
-    /* Berechnungen */
-    const lv = num(n.lv), lb = num(n.lb), fv = num(n.fv), fb = num(n.fb);
-    const ld = Math.max(0, lb - lv), fd = Math.max(0, fb - fv);
+    const lv = parseNum(r.lv);
+    const lb = parseNum(r.lb);
+    const fv = parseNum(r.fv);
+    const fb = parseNum(r.fb);
+    const ld = Math.max(0, lb - lv);
+    const fd = Math.max(0, fb - fv);
     const len = Math.max(lb, fb);
 
-    const ty = rowY + (rowH * 0.38);  /* Textbasislinie zentriert in Zeile */
-    const fs = 7.5;
+    const vals = [
+      r.nr || '',
+      r.neigung || '',
+      (r.bez && r.bez !== '–') ? r.bez : '',
+      r.gewebe || '',
+      r.bohrloch || '',
+      r.zement !== '' ? fmtDE(parseNum(r.zement)) : '',
+      r.wz || '',
+      r.lv !== '' ? fmtDE(lv) : '',
+      r.lb !== '' ? fmtDE(lb) : '',
+      (r.lv !== '' || r.lb !== '') ? fmtDE(ld) : '',
+      r.fv !== '' ? fmtDE(fv) : '',
+      r.fb !== '' ? fmtDE(fb) : '',
+      (r.fv !== '' || r.fb !== '') ? fmtDE(fd) : '',
+      len > 0 ? fmtDE(len) : '',
+      r.note || ''
+    ];
 
-    /* Hilfsfunktion: Text zentriert in Zelle, innerhalb Grenzen */
-    const cell = (txt, col, align = 'center') => {
-      const v = String(txt ?? '').trim();
-      if (!v || v === '0' && col > 5) return;
-      if (!v || v === '–') return;
-      clipText(v, CX[col] + mm(0.8), ty, CW[col] - mm(1.6), fR, fs, K, align);
-    };
+    vals.forEach((val, c) => {
+      if (!val) return;
+      let align = 'center';
+      let size = 5.7;
+      if (c === 0 || c === 2 || c === 14) align = 'left';
+      if ([5, 7, 8, 9, 10, 11, 12, 13].includes(c)) align = 'right';
+      if (c === 14) size = 5.5;
+      drawTextCell(val, xPos[c], y, col[c], dataRowH, fontR, size, align);
+    });
 
-    cell(n.nr || '',                       0, 'left');
-    cell(n.nei || '',                       1, 'center');
-    cell((n.bez && n.bez !== '–') ? n.bez : '', 2, 'left');
-    cell(n.gew || '',                       3, 'center');
-    cell(n.bohr || '',                      4, 'center');
-    cell(n.zem ? fmtC(num(n.zem), 2) : '', 5, 'right');
-    cell(n.wz  ? String(n.wz).replace('.', ',') : '', 6, 'center');
-
-    if (n.lv !== '') clipText(fmtC(lv, 2), CX[7] + mm(0.8), ty, CW[7] - mm(1.6), fR, fs, K, 'right');
-    if (n.lb !== '') clipText(fmtC(lb, 2), CX[8] + mm(0.8), ty, CW[8] - mm(1.6), fR, fs, K, 'right');
-    if (n.lv !== '' || n.lb !== '') clipText(fmtC(ld, 2), CX[9] + mm(0.8), ty, CW[9] - mm(1.6), fR, fs, K, 'right');
-
-    if (n.fv !== '') clipText(fmtC(fv, 2), CX[10] + mm(0.8), ty, CW[10] - mm(1.6), fR, fs, K, 'right');
-    if (n.fb !== '') clipText(fmtC(fb, 2), CX[11] + mm(0.8), ty, CW[11] - mm(1.6), fR, fs, K, 'right');
-    if (n.fv !== '' || n.fb !== '') clipText(fmtC(fd, 2), CX[12] + mm(0.8), ty, CW[12] - mm(1.6), fR, fs, K, 'right');
-
-    if (len > 0) clipText(fmtC(len, 2), CX[13] + mm(0.8), ty, CW[13] - mm(1.6), fR, fs, K, 'right');
-    if (n.note) clipText(n.note, CX[14] + mm(0.8), ty, CW[14] - mm(1.6), fR, 6.8, K, 'left');
+    y -= dataRowH;
   }
 
-  /* Äußerer Rahmen Datentabelle */
-  const dataTop    = th2Y;
-  const dataBottom = tableBottomY;
-  rect(X0, dataBottom, TW, dataTop - dataBottom, { borderColor: K, borderWidth: 0.8 });
+  drawRect(left, y, width, sum1H, G, 0.8);
 
-  /* ═══════════════════════════════════════════════
-     SUMMEN-ZEILE (wie Vorlage [10])
-  ═══════════════════════════════════════════════ */
-  const sums = sumsOf(snap);
-  const sumY = tableBottomY;
-  rect(X0, sumY - FOOT_H, TW, FOOT_H, { color: MGREY, borderColor: K, borderWidth: 0.8 });
+  const third = width / 3;
+  page.drawLine({ start: { x: left + third, y: y - sum1H }, end: { x: left + third, y }, thickness: 0.5, color: K });
+  page.drawLine({ start: { x: left + third * 2, y: y - sum1H }, end: { x: left + third * 2, y }, thickness: 0.5, color: K });
 
-  const sumTY = sumY - FOOT_H + mm(2.5);
-  const third = TW / 3;
+  const sums = getSnapshotSums(snap);
 
-  /* Block 1 */
-  clipText('Nagelanzahl [Stk.]:', X0 + PAD, sumTY, mm(35), fB, 8);
-  clipText(String(sums.cnt), X0 + mm(36), sumTY, third - mm(37), fB, 9, rgb(0, 0, 0.6));
+  drawTextCell(`Nagelanzahl [Stk.]: ${sums.count}`, left, y, third, sum1H, fontB, 8);
+  drawTextCell(`Zement ges. [kg]: ${fmtDE(sums.sumZement)}`, left + third, y, third, sum1H, fontB, 8);
+  drawTextCell(`Nagellänge ges. [m]: ${fmtDE(sums.sumLen)}`, left + third * 2, y, third, sum1H, fontB, 8);
 
-  /* Block 2 */
-  clipText('Zement ges. [kg]:', X0 + third + PAD, sum
+  y -= sum1H;
+
+  drawRect(left, y, width, sum2H, W, 0.8);
+
+  const q = width / 4;
+  page.drawLine({ start: { x: left + q, y: y - sum2H }, end: { x: left + q, y }, thickness: 0.5, color: K });
+  page.drawLine({ start: { x: left + q * 2, y: y - sum2H }, end: { x: left + q * 2, y }, thickness: 0.5, color: K });
+  page.drawLine({ start: { x: left + q * 3, y: y - sum2H }, end: { x: left + q * 3, y }, thickness: 0.5, color: K });
+
+  drawTextCell(`Bohrzeitraum: ${meta.bohrzeitraum || ''}`, left, y, q, sum2H, fontR, 7);
+  drawTextCell(`Verpresszeitraum: ${meta.verpresszeitraum || ''}`, left + q, y, q, sum2H, fontR, 7);
+  drawTextCell('Für den Auftragnehmer:', left + q * 2, y, q, sum2H, fontR, 7);
+  drawTextCell('Für den Auftraggeber:', left + q * 3, y, q, sum2H, fontR, 7);
+
+  y -= sum2H;
+
+  drawRect(left, y, width, sigH, W, 0.8);
+  page.drawLine({ start: { x: left + width / 2, y: y - sigH }, end: { x: left + width / 2, y }, thickness: 0.5, color: K });
+
+  drawTextCell(meta.sigAnName ? `i.A. ${meta.sigAnName}` : '', left, y, width / 2, mm(4.5), fontR, 7);
+  drawTextCell(meta.sigAgName || '', left + width / 2, y, width / 2, mm(4.5), fontR, 7);
+
+  async function drawSignature(dataUrl, x, yTop, w, h) {
+    const u8 = dataURLtoUint8(dataUrl);
+    if (!u8) return;
+    const img = await pdf.embedPng(u8);
+    const pad = mm(2);
+    const aw = Math.max(1, w - pad * 2);
+    const ah = Math.max(1, h - pad * 2);
+    const scale = Math.min(aw / img.width, ah / img.height);
+    const dw = img.width * scale;
+    const dh = img.height * scale;
+    page.drawImage(img, {
+      x: x + (w - dw) / 2,
+      y: yTop - h + (h - dh) / 2,
+      width: dw,
+      height: dh
+    });
+  }
+
+  await drawSignature(snap.sign?.an || '', left, y - mm(4.5), width / 2, sigH - mm(4.5));
+  await drawSignature(snap.sign?.ag || '', left + width / 2, y - mm(4.5), width / 2, sigH - mm(4.5));
+
+  const bytes = await pdf.save();
+  const blob = new Blob([bytes], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, '_blank');
+
+  if (!win) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${meta.protoNr || 'X'}_Bohrprotokoll_${(meta.baustelle || 'Baustelle').replace(/\s+/g, '_')}.pdf`;
+    a.click();
+  }
+
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+function hookMetaEvents() {
+  [
+    'inp-datum',
+    'inp-proto-nr',
+    'inp-baustelle',
+    'inp-an',
+    'inp-ag',
+    'inp-bohrsystem',
+    'inp-bohrzeitraum',
+    'inp-verpresszeitraum',
+    'inp-hinweis',
+    'sigAnName',
+    'sigAgName'
+  ].forEach((id) => {
+    $(id)?.addEventListener('input', onAnyInput);
+    $(id)?.addEventListener('change', onAnyInput);
+  });
+}
+
+function hookButtons() {
+  $('btnReset')?.addEventListener('click', () => {
+    $('inp-proto-nr').value = '';
+    $('inp-baustelle').value = '';
+    $('inp-ag').value = '';
+    $('inp-bohrsystem').value = '';
+    $('inp-bohrzeitraum').value = '';
+    $('inp-verpresszeitraum').value = '';
+    $('inp-hinweis').value = '';
+    $('sigAnName').value = '';
+    $('sigAgName').value = '';
+
+    rowRefs.forEach((r) => {
+      r.nr.value = '';
+      r.neigung.value = '';
+      r.bez.value = '–';
+      r.gewebe.value = 'nein';
+      r.bohrloch.value = '';
+      r.zement.value = '';
+      r.wz.value = '0,45';
+      r.lv.value = '';
+      r.lb.value = '';
+      r.fv.value = '';
+      r.fb.value = '';
+      r.note.value = '';
+    });
+
+    sigPads.an?.clear();
+    sigPads.ag?.clear();
+
+    recalc();
+    saveDraftDebounced();
+  });
+
+  $('btnSave')?.addEventListener('click', () => {
+    saveToHistory();
+    alert('Protokoll gespeichert.');
+  });
+
+  $('btnPdf')?.addEventListener('click', async () => {
+    try {
+      await exportPdf();
+    } catch (err) {
+      console.error(err);
+      alert('PDF-Fehler: ' + (err?.message || String(err)));
+    }
+  });
+}
+
+function initInstallButton() {
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    installPrompt = e;
+    const btn = $('btnInstall');
+    if (btn) btn.hidden = false;
+  });
+
+  $('btnInstall')?.addEventListener('click', async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const choice = await installPrompt.userChoice;
+    if (choice?.outcome === 'accepted') $('btnInstall').hidden = true;
+    installPrompt = null;
+  });
+
+  window.addEventListener('appinstalled', () => {
+    $('btnInstall') && ($('btnInstall').hidden = true);
+    installPrompt = null;
+  });
+}
+
+async function registerSW() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.register(`sw.js?v=${VERSION}`, { updateViaCache: 'none' });
+    reg.update().catch(() => {});
+  } catch {}
+}
+
+window.addEventListener('DOMContentLoaded', async () => {
+  if ($('inp-datum') && !$('inp-datum').value) {
+    $('inp-datum').value = new Date().toISOString().slice(0, 10);
+  }
+
+  initTabs();
+  buildTable();
+  initSignaturePads();
+  hookMetaEvents();
+  hookButtons();
+  initInstallButton();
+
+  loadDraft();
+  recalc();
+  renderHistory();
+
+  registerSW();
+});
