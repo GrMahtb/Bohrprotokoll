@@ -1,199 +1,201 @@
-:root {
-  --bg: #0f0f10;
-  --card: #171718;
-  --card2: #202022;
-  --border: #2a2a2d;
-  --accent: #ffed00;
-  --text: #f2f2f2;
-  --muted: #8a8a92;
-  --ok: #00cc66;
-  --err: #ff4444;
-  --r: 16px;
-}
-* { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { height: 100%; }
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  padding: 0 14px 32px;
-  max-width: 1400px;
-  margin: 0 auto;
-}
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111111">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Bohrprotokoll Zaun">
+  <title>HTB · Bohrprotokoll Zaun</title>
 
-/* ── Brand ── */
-.brand { margin: 0 -14px 12px; overflow: hidden; }
-.brand__bar {
-  background: #000;
-  display: flex; align-items: center; gap: 14px;
-  padding: 10px 16px;
-}
-.brand__logo { display: inline-flex; align-items: center; }
-.brand__logo svg { display: block; }
-.brand__company { color: #fff; font-weight: 900; font-size: 1.05em; white-space: nowrap; }
-.brand__subtitle { color: rgba(255,255,255,.55); font-size: .75em; margin-top: 3px; }
+  <link rel="manifest" href="manifest.json?v=20260408-01">
+  <link rel="icon" type="image/svg+xml" href="logo.svg?v=20260408-01">
+  <link rel="stylesheet" href="styles.css?v=20260408-01">
 
-/* ── Tabs ── */
-.tabs {
-  display: flex; gap: 4px;
-  background: var(--card2); border: 1px solid var(--border);
-  border-radius: 12px; padding: 4px; margin-bottom: 12px;
-}
-.tab {
-  flex: 1; border: none; background: transparent; color: var(--text);
-  padding: 10px 6px; border-radius: 10px; font-weight: 900;
-  cursor: pointer; font-size: .88em;
-}
-.tab.is-active { background: var(--accent); color: #111; }
-.pane { display: none; }
-.pane.is-active { display: block; }
+  <script defer src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <script defer src="app.js?v=20260408-01"></script>
+</head>
+<body>
 
-/* ── Cards ── */
-.card {
-  background: var(--card); border: 1px solid var(--border);
-  border-radius: var(--r); padding: 14px; margin-bottom: 12px;
-}
-.card__title {
-  font-size: .72em; color: var(--accent);
-  text-transform: uppercase; letter-spacing: 1px; font-weight: 950;
-  margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
-}
-.card__title::before {
-  content: ""; width: 3px; height: 14px; border-radius: 2px; background: var(--accent);
-}
-.card--collapsible { padding-bottom: 10px; }
-.card--collapsible > summary { list-style: none; outline: none; }
-.card--collapsible > summary::-webkit-details-marker { display: none; }
-.card--collapsible > summary.card__title { cursor: pointer; margin-bottom: 0; }
-.card--collapsible[open] > summary.card__title { margin-bottom: 12px; }
-.card--collapsible > summary.card__title::after {
-  content: "▾"; margin-left: auto; color: var(--muted);
-  font-weight: 900; transition: transform .2s; font-size: 1.4em;
-}
-.card--collapsible:not([open]) > summary.card__title::after { transform: rotate(-90deg); }
-.card__body { margin-top: 4px; }
+  <header class="brand">
+    <div class="brand__bar">
+      <div class="brand__logo">
+        <img src="logo.svg?v=20260408-01" alt="HTB">
+      </div>
+      <div class="brand__info">
+        <div class="brand__company">HTB Baugesellschaft m.b.H.</div>
+        <div class="brand__subtitle">Bohrprotokoll Zaun · Eingabe · Speicher · PDF · Offline</div>
+      </div>
+    </div>
+  </header>
 
-/* ── Form ── */
-.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-@media (max-width: 600px) { .form-grid { grid-template-columns: 1fr; } }
-.field { display: flex; flex-direction: column; gap: 4px; }
-.field--full { grid-column: 1 / -1; }
-.field__label {
-  font-size: .75em; color: var(--muted); font-weight: 900;
-  text-transform: uppercase; letter-spacing: .5px;
-}
-.field__input {
-  background: var(--card2); color: var(--text);
-  border: 1px solid var(--border); border-radius: 10px;
-  padding: 9px 12px; font-size: .9em; outline: none; font-family: inherit;
-}
+  <nav class="tabs" role="tablist" aria-label="Menü">
+    <button class="tab is-active" data-tab="protokoll" type="button">Protokoll</button>
+    <button class="tab" data-tab="verlauf" type="button">Verlauf</button>
+  </nav>
 
-/* ── Table ── */
-.table-wrap { overflow-x: auto; }
-.proto-table {
-  width: 100%; border-collapse: collapse;
-  font-size: .76em; min-width: 1180px;
-}
-.proto-table th {
-  background: var(--card2); color: var(--muted);
-  font-weight: 900; font-size: .80em;
-  padding: 6px 4px; text-align: center;
-  border: 1px solid var(--border);
-  white-space: nowrap; line-height: 1.3;
-}
-.th-group { font-weight: 900; font-size: .82em; }
-.th-lock { background: #1a2030; color: #7ab0e0; }
-.th-fels { background: #1a2820; color: #7ae0a0; }
-.th-nr  { width: 60px; }
-.th-sm  { width: 70px; }
-.th-xs  { width: 60px; }
-.th-bez { width: 120px; }
-.th-anm { min-width: 120px; }
+  <main id="tab-protokoll" class="pane is-active" role="tabpanel">
+    <details class="card card--collapsible" open>
+      <summary class="card__title">Stammdaten</summary>
+      <div class="card__body">
+        <div class="form-grid">
+          <label class="field">
+            <span class="field__label">Datum</span>
+            <input id="inp-datum" class="field__input" type="date">
+          </label>
 
-.proto-table td {
-  padding: 3px 4px; border: 1px solid #1e1e22;
-  vertical-align: middle; text-align: center;
-}
-.proto-table input[type="number"],
-.proto-table input[type="text"] {
-  background: var(--card2); color: var(--text);
-  border: 1px solid var(--border); border-radius: 5px;
-  padding: 3px 5px; font-family: inherit; outline: none;
-  font-size: .95em; text-align: center; width: 100%;
-}
-.proto-table input.inp-nr    { text-align: left; }
-.proto-table input.inp-note  { text-align: left; }
-.proto-table select.sel-bez {
-  background: var(--card2); color: var(--text);
-  border: 1px solid var(--border); border-radius: 5px;
-  padding: 3px 4px; font-family: inherit; font-size: .88em;
-  outline: none; width: 100%;
-}
-.td-diff { color: var(--muted); font-size: .88em; }
-.td-len  { color: var(--accent); font-weight: 900; }
+          <label class="field">
+            <span class="field__label">Bohrprotokoll Nr.</span>
+            <input id="inp-proto-nr" class="field__input" type="text" placeholder="z.B. 001">
+          </label>
 
-.sum-row td { padding: 8px 5px; border-top: 2px solid var(--accent); }
-.sum-lbl { font-weight: 900; text-align: right; white-space: nowrap; }
-.sum-val { color: var(--accent); font-weight: 900; }
+          <label class="field field--full">
+            <span class="field__label">Baustelle</span>
+            <input id="inp-baustelle" class="field__input" type="text" placeholder="z.B. FS L175 - SSZ 1.5">
+          </label>
 
-/* ── Buttons ── */
-.buttons { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
-.btn {
-  border: none; border-radius: 999px; padding: 12px 24px;
-  font-weight: 950; cursor: pointer; font-size: .95em;
-  font-family: inherit; transition: opacity .2s, background .2s;
-}
-.btn:disabled { opacity: .4; cursor: not-allowed; }
-.btn--accent { background: var(--accent); color: #111; }
-.btn--ghost { background: var(--card2); border: 1px solid var(--border); color: var(--text); }
-.btn--install {
-  margin-top: 10px; padding: 8px 20px; font-size: .80em;
-  background: transparent; border: 1px solid var(--border);
-  color: var(--muted); border-radius: 999px; cursor: pointer;
-}
-.btn--install:hover { color: var(--accent); border-color: var(--accent); }
+          <label class="field">
+            <span class="field__label">Auftragnehmer</span>
+            <input id="inp-an" class="field__input" type="text" value="HTB Baugesellschaft m.b.H.">
+          </label>
 
-/* ── Hints ── */
-.hint { margin-top: 10px; color: var(--muted); font-size: .78em; text-align: center; line-height: 1.5; }
+          <label class="field">
+            <span class="field__label">Auftraggeber</span>
+            <input id="inp-ag" class="field__input" type="text" placeholder="z.B. LRA Rottweil">
+          </label>
+        </div>
+      </div>
+    </details>
 
-/* ── Verlauf ── */
-.historyList { display: flex; flex-direction: column; gap: 10px; }
-.historyItem {
-  background: var(--card2); border: 1px solid var(--border);
-  border-radius: 12px; padding: 12px;
-}
-.historyTop {
-  display: flex; justify-content: space-between; gap: 10px;
-  flex-wrap: wrap; font-weight: 900;
-}
-.historySub { color: var(--muted); font-size: .82em; margin-top: 6px; line-height: 1.5; }
-.historyBtns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
-.historyBtns .btn { padding: 9px 14px; font-size: .86em; }
+    <details class="card card--collapsible" open>
+      <summary class="card__title">Bohrsystem &amp; Zeiträume</summary>
+      <div class="card__body">
+        <div class="form-grid">
+          <label class="field field--full">
+            <span class="field__label">Bohrsystem</span>
+            <input id="inp-bohrsystem" class="field__input" type="text" placeholder="z.B. LKW + Bohrlafette">
+          </label>
 
-/* ── Footer ── */
-.footer {
-  text-align: center; color: var(--muted); font-size: .78em;
-  margin-top: 16px; padding: 12px; border-top: 1px solid var(--border);
-}
-.footer b { color: var(--text); }
+          <label class="field">
+            <span class="field__label">Bohrzeitraum</span>
+            <input id="inp-bohrzeitraum" class="field__input" type="text" placeholder="z.B. April 2025">
+          </label>
 
-/* ── Signatures ── */
-.sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-@media (max-width: 720px) { .sig-grid { grid-template-columns: 1fr; } }
-.sig-box {
-  background: var(--card2); border: 1px solid var(--border);
-  border-radius: 12px; padding: 10px;
-}
-.sig-head {
-  display: flex; justify-content: space-between; align-items: center;
-  gap: 10px; margin-bottom: 8px;
-}
-.sig-title { font-weight: 900; color: var(--muted); font-size: .80em; }
-.sig-name { max-width: 200px; }
-.sig-canvas {
-  width: 100%; height: 140px;
-  background: #fff; border: 2px solid #000; border-radius: 8px;
-  display: block; touch-action: none;
-  user-select: none; -webkit-user-select: none;
-}
-.sig-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
+          <label class="field">
+            <span class="field__label">Verpresszeitraum</span>
+            <input id="inp-verpresszeitraum" class="field__input" type="text" placeholder="z.B. April 2025">
+          </label>
+
+          <label class="field field--full">
+            <span class="field__label">Hinweiszeile im PDF</span>
+            <input id="inp-hinweis" class="field__input" type="text" placeholder="z.B. Nachweis für zu steil gebohrte Anker wurde bereits nachgereicht">
+          </label>
+        </div>
+      </div>
+    </details>
+
+    <section class="card">
+      <div class="card__title">Nageldaten · 25 Zeilen fix</div>
+      <div class="hint">
+        Nur <b>Bezeichnung</b> ist als Dropdown ausgeführt. Alle anderen Felder bleiben frei editierbar.
+      </div>
+
+      <div class="table-wrap">
+        <table class="proto-table">
+          <thead>
+            <tr>
+              <th rowspan="2" class="w-nr">Nr.</th>
+              <th rowspan="2" class="w-nei">Neigung<br>[°]</th>
+              <th rowspan="2" class="w-bez">Bezeichnung</th>
+              <th rowspan="2" class="w-gew">Gewebe-<br>strumpf</th>
+              <th rowspan="2" class="w-bohr">Bohrloch<br>ø [mm]</th>
+              <th rowspan="2" class="w-zem">Zement<br>[kg]</th>
+              <th rowspan="2" class="w-wz">W/Z-<br>Wert</th>
+              <th colspan="3" class="th-lock">Lockergestein</th>
+              <th colspan="3" class="th-fels">Fels</th>
+              <th rowspan="2" class="w-nagel">Nagel<br>[m]</th>
+              <th rowspan="2" class="w-anm">Anmerkungen</th>
+            </tr>
+            <tr>
+              <th class="w-mini">von [m]</th>
+              <th class="w-mini">bis [m]</th>
+              <th class="w-mini">Diff. [m]</th>
+              <th class="w-mini">von [m]</th>
+              <th class="w-mini">bis [m]</th>
+              <th class="w-mini">Diff. [m]</th>
+            </tr>
+          </thead>
+
+          <tbody id="nailBody"></tbody>
+
+          <tfoot>
+            <tr class="sum-row">
+              <td colspan="2" class="sum-lbl">Nagelanzahl [Stk.]:</td>
+              <td id="sumCount" class="sum-val">0</td>
+              <td colspan="2" class="sum-lbl">Zement ges. [kg]:</td>
+              <td id="sumCement" class="sum-val">0,00</td>
+              <td colspan="2" class="sum-lbl">Nagellänge ges. [m]:</td>
+              <td id="sumLen" class="sum-val">0,00</td>
+              <td colspan="6"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </section>
+
+    <details class="card card--collapsible">
+      <summary class="card__title">Unterschriften</summary>
+      <div class="card__body">
+        <div class="sig-grid">
+          <div class="sig-box">
+            <div class="sig-head">
+              <div class="sig-title">Für den Auftragnehmer</div>
+              <input id="sigAnName" class="field__input sig-name" type="text" placeholder="i.A. Name">
+            </div>
+            <canvas id="sigAnCanvas" class="sig-canvas"></canvas>
+            <div class="sig-actions">
+              <button id="sigAnClear" class="btn btn--ghost" type="button">Löschen</button>
+            </div>
+          </div>
+
+          <div class="sig-box">
+            <div class="sig-head">
+              <div class="sig-title">Für den Auftraggeber</div>
+              <input id="sigAgName" class="field__input sig-name" type="text" placeholder="Name">
+            </div>
+            <canvas id="sigAgCanvas" class="sig-canvas"></canvas>
+            <div class="sig-actions">
+              <button id="sigAgClear" class="btn btn--ghost" type="button">Löschen</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <section class="card">
+      <div class="card__title">Aktionen</div>
+      <div class="buttons">
+        <button id="btnReset" class="btn btn--ghost" type="button">Reset</button>
+        <button id="btnSave" class="btn btn--accent" type="button">Speichern</button>
+        <button id="btnPdf" class="btn btn--ghost" type="button">PDF exportieren</button>
+      </div>
+      <div class="hint">PDF wird im A4-Querformat erzeugt, mit HTB-Logo und Zellbegrenzung im Text.</div>
+    </section>
+  </main>
+
+  <main id="tab-verlauf" class="pane" role="tabpanel" hidden>
+    <section class="card">
+      <div class="card__title">Gespeicherte Protokolle</div>
+      <div id="historyList" class="historyList"></div>
+      <div class="hint">Neueste oben · lokal gespeichert · max. 30 Einträge</div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    &copy; <b>HTB Baugesellschaft m.b.H.</b> – Bohrprotokoll Zaun PWA
+    <br>
+    <button id="btnInstall" class="btn btn--install" type="button" hidden>⬇ App installieren</button>
+  </footer>
+
+</body>
+</html>
