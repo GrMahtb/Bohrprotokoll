@@ -1,15 +1,19 @@
 {
   "name": "HTB Bohrprotokoll Zaun",
   "short_name": "Bohrprotokoll",
-  "description": "Bohrprotokoll Zaun – Eingabe, lokaler Speicher, PDF-Export A4 quer",
-  "start_url": "./",
+  "description": "Bohrprotokoll Zaun – Eingabe, lokaler Speicher, PDF-Export",
+  "start_url": "./index.html?v=20260408-01",
   "scope": "./",
   "display": "standalone",
   "background_color": "#111111",
   "theme_color": "#111111",
   "orientation": "landscape",
   "icons": [
-    { "src": "launchericon-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "launchericon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    {
+      "src": "logo.svg?v=20260408-01",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
   ]
 }
