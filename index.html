@@ -6,25 +6,25 @@
   <meta name="theme-color" content="#111111">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Bohrprotokoll Zaun">
-  <title>HTB · Bohrprotokoll Zaun</title>
+  <title>HTB · Bohrprotokoll Zaun V2</title>
 
-  <link rel="manifest" href="manifest.json?v=20260408-01">
-  <link rel="icon" type="image/svg+xml" href="logo.svg?v=20260408-01">
-  <link rel="stylesheet" href="styles.css?v=20260408-01">
+  <link rel="manifest" href="manifest.json?v=20260408-v2">
+  <link rel="icon" type="image/svg+xml" href="logo.svg?v=20260408-v2">
+  <link rel="stylesheet" href="styles.css?v=20260408-v2">
 
   <script defer src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-  <script defer src="app.js?v=20260408-01"></script>
+  <script defer src="app.js?v=20260408-v2"></script>
 </head>
 <body>
 
   <header class="brand">
     <div class="brand__bar">
       <div class="brand__logo">
-        <img src="logo.svg?v=20260408-01" alt="HTB">
+        <img src="logo.svg?v=20260408-v2" alt="HTB">
       </div>
       <div class="brand__info">
         <div class="brand__company">HTB Baugesellschaft m.b.H.</div>
-        <div class="brand__subtitle">Bohrprotokoll Zaun · Eingabe · Speicher · PDF · Offline</div>
+        <div class="brand__subtitle">Bohrprotokoll Zaun · Version 2 · Karteneingabe · PDF · Offline</div>
       </div>
     </div>
   </header>
@@ -95,52 +95,169 @@
     </details>
 
     <section class="card">
-      <div class="card__title">Nageldaten · 25 Zeilen fix</div>
-      <div class="hint">
-        Nur <b>Bezeichnung</b> ist als Dropdown ausgeführt. Alle anderen Felder bleiben frei editierbar.
+      <div class="card__title">Eingabemodus</div>
+
+      <div class="view-switch">
+        <button id="btnViewCards" class="view-btn is-active" type="button">Karteneingabe</button>
+        <button id="btnViewTable" class="view-btn" type="button">Tabellenansicht</button>
       </div>
 
-      <div class="table-wrap">
-        <table class="proto-table">
-          <thead>
-            <tr>
-              <th rowspan="2" class="w-nr">Nr.</th>
-              <th rowspan="2" class="w-nei">Neigung<br>[°]</th>
-              <th rowspan="2" class="w-bez">Bezeichnung</th>
-              <th rowspan="2" class="w-gew">Gewebe-<br>strumpf</th>
-              <th rowspan="2" class="w-bohr">Bohrloch<br>ø [mm]</th>
-              <th rowspan="2" class="w-zem">Zement<br>[kg]</th>
-              <th rowspan="2" class="w-wz">W/Z-<br>Wert</th>
-              <th colspan="3" class="th-lock">Lockergestein</th>
-              <th colspan="3" class="th-fels">Fels</th>
-              <th rowspan="2" class="w-nagel">Nagel<br>[m]</th>
-              <th rowspan="2" class="w-anm">Anmerkungen</th>
-            </tr>
-            <tr>
-              <th class="w-mini">von [m]</th>
-              <th class="w-mini">bis [m]</th>
-              <th class="w-mini">Diff. [m]</th>
-              <th class="w-mini">von [m]</th>
-              <th class="w-mini">bis [m]</th>
-              <th class="w-mini">Diff. [m]</th>
-            </tr>
-          </thead>
+      <div class="quickbar">
+        <div class="quickbar__stats">
+          <div class="stat-chip">
+            <span class="stat-chip__label">Nägel</span>
+            <span class="stat-chip__val" data-sum="count">0</span>
+          </div>
+          <div class="stat-chip">
+            <span class="stat-chip__label">Zement [kg]</span>
+            <span class="stat-chip__val" data-sum="cement">0,00</span>
+          </div>
+          <div class="stat-chip">
+            <span class="stat-chip__label">Nagellänge [m]</span>
+            <span class="stat-chip__val" data-sum="len">0,00</span>
+          </div>
+        </div>
 
-          <tbody id="nailBody"></tbody>
-
-          <tfoot>
-            <tr class="sum-row">
-              <td colspan="2" class="sum-lbl">Nagelanzahl [Stk.]:</td>
-              <td id="sumCount" class="sum-val">0</td>
-              <td colspan="2" class="sum-lbl">Zement ges. [kg]:</td>
-              <td id="sumCement" class="sum-val">0,00</td>
-              <td colspan="2" class="sum-lbl">Nagellänge ges. [m]:</td>
-              <td id="sumLen" class="sum-val">0,00</td>
-              <td colspan="6"></td>
-            </tr>
-          </tfoot>
-        </table>
+        <div class="quickbar__jump">
+          <label class="field field--jump">
+            <span class="field__label">Zeile öffnen</span>
+            <div class="jump-row">
+              <select id="jumpRow" class="field__select"></select>
+              <button id="btnJumpRow" class="btn btn--ghost btn--small" type="button">Öffnen</button>
+            </div>
+          </label>
+        </div>
       </div>
+    </section>
+
+    <details class="card card--collapsible">
+      <summary class="card__title">Serienerfassung</summary>
+      <div class="card__body">
+        <div class="form-grid">
+          <label class="field">
+            <span class="field__label">Von Zeile</span>
+            <input id="series-from" class="field__input" type="number" min="1" max="25" value="1">
+          </label>
+
+          <label class="field">
+            <span class="field__label">Bis Zeile</span>
+            <input id="series-to" class="field__input" type="number" min="1" max="25" value="25">
+          </label>
+
+          <label class="field">
+            <span class="field__label">Bezeichnung</span>
+            <select id="series-bez" class="field__select"></select>
+          </label>
+
+          <label class="field">
+            <span class="field__label">Neigung [°]</span>
+            <input id="series-neigung" class="field__input" type="number" step="1" placeholder="leer = unverändert">
+          </label>
+
+          <label class="field">
+            <span class="field__label">Gewebe-strumpf</span>
+            <select id="series-gewebe" class="field__select">
+              <option value="">(unverändert)</option>
+              <option value="nein">nein</option>
+              <option value="ja">ja</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span class="field__label">Bohrloch ø [mm]</span>
+            <input id="series-bohrloch" class="field__input" type="number" step="1" placeholder="leer = unverändert">
+          </label>
+
+          <label class="field">
+            <span class="field__label">Zement [kg]</span>
+            <input id="series-zement" class="field__input" type="number" step="0.01" placeholder="leer = unverändert">
+          </label>
+
+          <label class="field">
+            <span class="field__label">W/Z-Wert</span>
+            <input id="series-wz" class="field__input" type="text" placeholder="leer = unverändert">
+          </label>
+
+          <label class="field field--full">
+            <span class="field__label">Intervall-Vorlage</span>
+            <select id="series-pattern" class="field__select">
+              <option value="">(unverändert)</option>
+              <option value="4-7">0,00–4,00 / 4,00–7,00</option>
+              <option value="4.5-7">0,00–4,50 / 4,50–7,00</option>
+              <option value="5-7">0,00–5,00 / 5,00–7,00</option>
+              <option value="1-1.5">0,00–1,00 / 1,00–1,50</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="buttons" style="margin-top:12px;">
+          <button id="btnApplySeries" class="btn btn--accent" type="button">Auf Bereich anwenden</button>
+        </div>
+
+        <div class="hint">
+          Leere Felder bleiben unverändert. Praktisch für Serien mit gleichen Bezeichnungen, Neigungen und Tiefenbereichen.
+        </div>
+      </div>
+    </details>
+
+    <section id="viewCards" class="view-pane is-active">
+      <div id="cardList" class="rowCards"></div>
+    </section>
+
+    <section id="viewTable" class="view-pane" hidden>
+      <section class="card">
+        <div class="card__title">Tabellenansicht · Kontrolle</div>
+        <div class="table-wrap">
+          <table class="proto-table proto-table--review">
+            <thead>
+              <tr>
+                <th class="sticky-1">Nr.</th>
+                <th class="sticky-2">Neigung</th>
+                <th>Bezeichnung</th>
+                <th>Gewebe</th>
+                <th>Bohrloch</th>
+                <th>Zement</th>
+                <th>W/Z</th>
+                <th colspan="3" class="th-lock">Lockergestein</th>
+                <th colspan="3" class="th-fels">Fels</th>
+                <th>Nagel</th>
+                <th>Anmerkungen</th>
+                <th>Aktion</th>
+              </tr>
+              <tr>
+                <th class="sticky-1"></th>
+                <th class="sticky-2"></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th>von</th>
+                <th>bis</th>
+                <th>Diff.</th>
+                <th>von</th>
+                <th>bis</th>
+                <th>Diff.</th>
+                <th>[m]</th>
+                <th></th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="reviewBody"></tbody>
+            <tfoot>
+              <tr class="sum-row">
+                <td colspan="2" class="sum-lbl">Nagelanzahl [Stk.]:</td>
+                <td class="sum-val" data-sum="count">0</td>
+                <td colspan="2" class="sum-lbl">Zement ges. [kg]:</td>
+                <td class="sum-val" data-sum="cement">0,00</td>
+                <td colspan="2" class="sum-lbl">Nagellänge ges. [m]:</td>
+                <td class="sum-val" data-sum="len">0,00</td>
+                <td colspan="8"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </section>
     </section>
 
     <details class="card card--collapsible">
@@ -154,7 +271,7 @@
             </div>
             <canvas id="sigAnCanvas" class="sig-canvas"></canvas>
             <div class="sig-actions">
-              <button id="sigAnClear" class="btn btn--ghost" type="button">Löschen</button>
+              <button id="sigAnClear" class="btn btn--ghost btn--small" type="button">Löschen</button>
             </div>
           </div>
 
@@ -165,7 +282,7 @@
             </div>
             <canvas id="sigAgCanvas" class="sig-canvas"></canvas>
             <div class="sig-actions">
-              <button id="sigAgClear" class="btn btn--ghost" type="button">Löschen</button>
+              <button id="sigAgClear" class="btn btn--ghost btn--small" type="button">Löschen</button>
             </div>
           </div>
         </div>
@@ -179,7 +296,7 @@
         <button id="btnSave" class="btn btn--accent" type="button">Speichern</button>
         <button id="btnPdf" class="btn btn--ghost" type="button">PDF exportieren</button>
       </div>
-      <div class="hint">PDF wird im A4-Querformat erzeugt, mit HTB-Logo und Zellbegrenzung im Text.</div>
+      <div class="hint">PDF bleibt im Querformat mit HTB-Logo und 25 festen Zeilen.</div>
     </section>
   </main>
 
@@ -187,12 +304,12 @@
     <section class="card">
       <div class="card__title">Gespeicherte Protokolle</div>
       <div id="historyList" class="historyList"></div>
-      <div class="hint">Neueste oben · lokal gespeichert · max. 30 Einträge</div>
+      <div class="hint">Neueste oben · lokal/offline gespeichert · max. 30 Einträge</div>
     </section>
   </main>
 
   <footer class="footer">
-    &copy; <b>HTB Baugesellschaft m.b.H.</b> – Bohrprotokoll Zaun PWA
+    &copy; <b>HTB Baugesellschaft m.b.H.</b> – Bohrprotokoll Zaun V2
     <br>
     <button id="btnInstall" class="btn btn--install" type="button" hidden>⬇ App installieren</button>
   </footer>
